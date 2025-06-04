@@ -243,7 +243,7 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required(CONF_DESTINATION, default=dep.get(CONF_DESTINATION, "")): str,
             vol.Optional(CONF_DELAY, default=dep.get(CONF_DELAY, DEFAULT_DELAY)): int,
             vol.Optional(CONF_HEADING, default=dep.get(CONF_HEADING, "")): str,
-            vol.Optional(CONF_LINES, default=", ".join(dep.get(CONF_LINES, [])) if isinstance(dep.get(CONF_LINES, list)) else str(dep.get(CONF_LINES, ""))): str,  # Show as comma-separated string
+            vol.Optional(CONF_LINES, default=", ".join(dep.get(CONF_LINES, [])) if isinstance(dep.get(CONF_LINES), list) else str(dep.get(CONF_LINES, ""))): str,  # Show as comma-separated string
             vol.Optional(CONF_NAME, default=dep.get(CONF_NAME, "")): str,
         })
         if user_input is not None:
