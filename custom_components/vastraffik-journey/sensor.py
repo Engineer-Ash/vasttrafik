@@ -124,6 +124,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
                 departure.get(CONF_DELAY),
             )
             for departure in departures
+            for departure in departures
         ]
 
     entities = await hass.async_add_executor_job(create_planner_and_entities)
