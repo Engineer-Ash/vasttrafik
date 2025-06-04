@@ -53,9 +53,9 @@ class VastraffikJourneyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     @staticmethod
     @callback
     def async_get_options_flow(config_entry):
-        return VasttrafikOptionsFlowHandler(config_entry)
+        return VastraffikJourneyOptionsFlowHandler(config_entry)
 
-class VasttrafikOptionsFlowHandler(config_entries.OptionsFlow):
+class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry):
         self.config_entry = config_entry
         self.departures = list(config_entry.options.get(CONF_DEPARTURES, []))
