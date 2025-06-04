@@ -57,9 +57,18 @@ class VastraffikJourneyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry):
+        self.config_entry = config_entry
         self.departures = list(config_entry.options.get(CONF_DEPARTURES, []))
         self._current_departure = None
         self._edit_index = None
+
+    def _get_credentials(self):
+        # Prefer options, fallback to data
+        client_id = self.config_entry.options.get(CONF_CLIENT_ID) or self.config_entry.data.get(CONF_CLIENT_ID)
+        secret = self.config_entry.options.get(CONF_SECRET) or self.config_entry.data.get(CONF_SECRET)
+        if not client_id or not secret:
+            raise ValueError("Missing Västtrafik credentials in config entry.")
+        return client_id, secret
 
     async def async_step_init(self, user_input=None):
         return await self.async_step_menu()
@@ -106,9 +115,15 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             # Step 1: User entered a partial 'from' name, fetch suggestions
             partial = user_input["from_partial"]
             def get_suggestions():
-                planner = JournyPlanner(self.hass.data[DOMAIN]["client_id"], self.hass.data[DOMAIN]["secret"])
+                client_id, secret = self._get_credentials()
+                planner = JournyPlanner(client_id, secret)
                 return planner.location_name(partial)
-            suggestions = await self.hass.async_add_executor_job(get_suggestions)
+            try:
+                suggestions = await self.hass.async_add_executor_job(get_suggestions)
+            except Exception as ex:
+                _LOGGER.error("Failed to fetch location suggestions: %s", ex)
+                errors["base"] = "location_error"
+                suggestions = []
             choices = {str(i): loc["name"] for i, loc in enumerate(suggestions)}
             schema = vol.Schema({vol.Required("from_choice"): vol.In(list(choices.values()))})
             return self.async_show_form(
@@ -135,9 +150,15 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             # Step 1: User entered a partial 'destination' name, fetch suggestions
             partial = user_input["destination_partial"]
             def get_suggestions():
-                planner = JournyPlanner(self.hass.data[DOMAIN]["client_id"], self.hass.data[DOMAIN]["secret"])
+                client_id, secret = self._get_credentials()
+                planner = JournyPlanner(client_id, secret)
                 return planner.location_name(partial)
-            suggestions = await self.hass.async_add_executor_job(get_suggestions)
+            try:
+                suggestions = await self.hass.async_add_executor_job(get_suggestions)
+            except Exception as ex:
+                _LOGGER.error("Failed to fetch location suggestions: %s", ex)
+                errors["base"] = "location_error"
+                suggestions = []
             choices = {str(i): loc["name"] for i, loc in enumerate(suggestions)}
             schema = vol.Schema({vol.Required("destination_choice"): vol.In(list(choices.values()))})
             return self.async_show_form(
