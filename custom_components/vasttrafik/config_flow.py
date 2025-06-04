@@ -41,7 +41,7 @@ class VasttrafikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def _async_validate_credentials(self, key, secret):
         # Try to import and use the vasttrafik lib to validate credentials
         try:
-            import vasttrafik
+            import vasttrafik.custom_components.vasttrafik as vasttrafik
             planner = vasttrafik.JournyPlanner(key, secret)
             # Try a simple API call (e.g., get token or locations)
             await self.hass.async_add_executor_job(lambda: planner.location_name("Göteborg"))

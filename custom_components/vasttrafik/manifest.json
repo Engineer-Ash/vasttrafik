@@ -1,7 +1,7 @@
 {
   "domain": "vasttrafik",
   "name": "Västtrafik Journey Sensor",
-  "version": "1.0.0",
+  "version": "0.1.0",
   "documentation": "https://github.com/Engineer-Ash/vasttrafik",
   "requirements": ["vasttrafik"],
   "dependencies": [],
