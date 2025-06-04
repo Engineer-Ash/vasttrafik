@@ -250,6 +250,8 @@ class VasttrafikJourneySensor(SensorEntity):
                         "direction": service_journey.get("direction"),
                         "connections": connections_str,
                         "final_arrival": final_arrival_fmt,
+                        "connections": connections_str,
+                        "final_arrival": final_arrival_fmt,
                     }
                     self._attributes = {k: v for k, v in params.items() if v}
                     break
