@@ -1,0 +1,1 @@
+"""Vasttrafik component."""
