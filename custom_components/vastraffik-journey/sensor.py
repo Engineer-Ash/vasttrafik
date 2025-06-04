@@ -36,7 +36,7 @@ CONF_FROM = "from"
 CONF_DESTINATION = "destination"
 CONF_HEADING = "heading"
 CONF_LINES = "lines"
-CONF_KEY = "key"
+CONF_CLIENT_ID = "client_id"
 CONF_SECRET = "secret"
 
 DEFAULT_DELAY = 0
@@ -45,7 +45,7 @@ MIN_TIME_BETWEEN_UPDATES = timedelta(seconds=120)
 
 PLATFORM_SCHEMA = SENSOR_PLATFORM_SCHEMA.extend(
     {
-        vol.Required(CONF_KEY): cv.string,
+        vol.Required(CONF_CLIENT_ID): cv.string,
         vol.Required(CONF_SECRET): cv.string,
         vol.Required(CONF_DEPARTURES): [
             {
@@ -70,7 +70,7 @@ async def async_setup_platform(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Set up the journey sensor from YAML."""
-    planner = JournyPlanner(config.get(CONF_KEY), config.get(CONF_SECRET))
+    planner = JournyPlanner(config.get(CONF_CLIENT_ID), config.get(CONF_SECRET))
     async_add_entities(
         [
             VasttrafikJourneySensor(
@@ -102,7 +102,7 @@ def setup_platform(
 async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up the journey sensor from a config entry (UI)."""
     data = entry.data
-    planner = JournyPlanner(data[CONF_KEY], data[CONF_SECRET])
+    planner = JournyPlanner(data[CONF_CLIENT_ID], data[CONF_SECRET])
     async_add_entities(
         [
             VasttrafikJourneySensor(

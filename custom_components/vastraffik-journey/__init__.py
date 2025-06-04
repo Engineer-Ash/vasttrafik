@@ -1,4 +1,4 @@
-"""Vasttrafik component."""
+"""Vastraffik Journey component."""
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -7,16 +7,20 @@ from typing import Any
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the Västtrafik component from YAML."""
+    """Set up the Vastraffik Journey component from YAML."""
+    # Allow YAML configuration for client id/secret
+    if config.get("vastraffik_journey"):
+        hass.data.setdefault("vastraffik_journey", {})
+        hass.data["vastraffik_journey"]["yaml_config"] = config["vastraffik_journey"]
     return True
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up Västtrafik from a config entry (UI)."""
+    """Set up Vastraffik Journey from a config entry (UI)."""
     # Ensure required values are present before starting sensor
-    if not entry.data.get("key") or not entry.data.get("secret"):
+    if not entry.data.get("client_id") or not entry.data.get("secret"):
         hass.helpers.logger.error(
-            "Västtrafik config entry missing key or secret. Sensor setup aborted."
+            "Vastraffik Journey config entry missing client_id or secret. Sensor setup aborted."
         )
         return False
     hass.async_create_task(

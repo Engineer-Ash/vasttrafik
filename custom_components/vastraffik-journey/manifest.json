@@ -1,13 +1,13 @@
 {
-  "domain": "vasttrafik",
-  "name": "Västtrafik Journey Sensor",
+  "domain": "vastraffik_journey",
+  "name": "Vastraffik Journey Sensor",
   "version": "0.1.2",
-  "documentation": "https://github.com/Engineer-Ash/vasttrafik",
+  "documentation": "https://github.com/Engineer-Ash/vastraffik-journey",
   "description": "A Home Assistant integration for Västtrafik journey planning using the official Travel Planner v4 API. Provides journey-based public transport sensors, supports multiple departures, lines, and destinations, and features both UI and YAML configuration. Includes credential validation, unique entity IDs, and HACS compatibility.",
   "requirements": ["vtjp==0.2.1"],
   "codeowners": ["@Engineer-Ash"],
   "iot_class": "cloud_polling",
   "integration_type": "hub",
   "config_flow": true,
-  "issue_tracker": "https://github.com/Engineer-Ash/vasttrafik/issues"
+  "issue_tracker": "https://github.com/Engineer-Ash/vastraffik-journey/issues"
 }

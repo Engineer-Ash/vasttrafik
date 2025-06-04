@@ -2,15 +2,15 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.const import CONF_NAME
-from .sensor import CONF_KEY, CONF_SECRET, CONF_DEPARTURES, CONF_FROM, CONF_DESTINATION, CONF_DELAY, CONF_HEADING, CONF_LINES, DEFAULT_DELAY
+from .sensor import CONF_CLIENT_ID, CONF_SECRET, CONF_DEPARTURES, CONF_FROM, CONF_DESTINATION, CONF_DELAY, CONF_HEADING, CONF_LINES, DEFAULT_DELAY
 from vasttrafik import JournyPlanner
 import logging
 
 _LOGGER = logging.getLogger(__name__)
-DOMAIN = "vasttrafik"
+DOMAIN = "vastraffik_journey"
 
-class VasttrafikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Handle a config flow for Västtrafik."""
+class VastraffikJourneyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Handle a config flow for Vastraffik Journey."""
 
     VERSION = 1
 
@@ -18,19 +18,19 @@ class VasttrafikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors = {}
         if user_input is not None:
             # Validate credentials before creating entry
-            valid = await self._async_validate_credentials(user_input[CONF_KEY], user_input[CONF_SECRET])
+            valid = await self._async_validate_credentials(user_input[CONF_CLIENT_ID], user_input[CONF_SECRET])
             if valid:
-                await self.async_set_unique_id(user_input[CONF_KEY])
+                await self.async_set_unique_id(user_input[CONF_CLIENT_ID])
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(title="Västtrafik", data={
-                    CONF_KEY: user_input[CONF_KEY],
+                    CONF_CLIENT_ID: user_input[CONF_CLIENT_ID],
                     CONF_SECRET: user_input[CONF_SECRET],
                 })
             else:
-                errors[CONF_KEY] = "invalid_auth"
+                errors[CONF_CLIENT_ID] = "invalid_auth"
 
         schema = vol.Schema({
-            vol.Required(CONF_KEY): str,
+            vol.Required(CONF_CLIENT_ID): str,
             vol.Required(CONF_SECRET): str,
         })
         return self.async_show_form(
@@ -39,9 +39,9 @@ class VasttrafikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def _async_validate_credentials(self, key, secret):
+    async def _async_validate_credentials(self, client_id, secret):
         try:
-            planner = JournyPlanner(key, secret)
+            planner = JournyPlanner(client_id, secret)
             await self.hass.async_add_executor_job(lambda: planner.location_name("Göteborg"))
             return True
         except Exception as ex:
