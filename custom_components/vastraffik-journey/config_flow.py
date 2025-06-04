@@ -40,10 +40,12 @@ class VastraffikJourneyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def _async_validate_credentials(self, client_id, secret):
-        try:
+        def validate():
             planner = JournyPlanner(client_id, secret)
-            await self.hass.async_add_executor_job(lambda: planner.location_name("Göteborg"))
+            planner.location_name("Göteborg")
             return True
+        try:
+            return await self.hass.async_add_executor_job(validate)
         except Exception as ex:
             _LOGGER.warning("Västtrafik credential validation failed: %s", ex)
             return False

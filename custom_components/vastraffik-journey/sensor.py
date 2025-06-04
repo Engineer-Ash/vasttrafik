@@ -47,18 +47,20 @@ PLATFORM_SCHEMA = SENSOR_PLATFORM_SCHEMA.extend(
     {
         vol.Required(CONF_CLIENT_ID): cv.string,
         vol.Required(CONF_SECRET): cv.string,
-        vol.Required(CONF_DEPARTURES): [
-            {
-                vol.Required(CONF_FROM): cv.string,
-                vol.Required(CONF_DESTINATION): cv.string,
-                vol.Optional(CONF_DELAY, default=DEFAULT_DELAY): cv.positive_int,
-                vol.Optional(CONF_HEADING): cv.string,
-                vol.Optional(CONF_LINES, default=[]): vol.All(
-                    cv.ensure_list, [cv.string]
-                ),
-                vol.Optional(CONF_NAME): cv.string,
-            }
-        ],
+        vol.Required(CONF_DEPARTURES): vol.All(
+            [
+                {
+                    vol.Required(CONF_FROM): cv.string,
+                    vol.Required(CONF_DESTINATION): cv.string,
+                    vol.Optional(CONF_DELAY, default=DEFAULT_DELAY): cv.positive_int,
+                    vol.Optional(CONF_HEADING): cv.string,
+                    vol.Optional(CONF_LINES, default=[]): vol.All(
+                        cv.ensure_list, [cv.string]
+                    ),
+                    vol.Optional(CONF_NAME): cv.string,
+                }
+            ]
+        ),
     }
 )
 
