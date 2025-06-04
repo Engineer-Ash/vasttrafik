@@ -106,6 +106,9 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
     data = entry.data
 
     def create_planner_and_entities():
+        if CONF_DEPARTURES not in data:
+            _LOGGER.error("No departures found in config entry data: %s", data)
+            return []
         planner = JournyPlanner(data[CONF_CLIENT_ID], data[CONF_SECRET])
         return [
             VasttrafikJourneySensor(

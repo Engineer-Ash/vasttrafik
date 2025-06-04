@@ -102,26 +102,83 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_add_departure(self, user_input=None):
         errors = {}
+        if user_input is not None and "from_partial" in user_input:
+            # Step 1: User entered a partial 'from' name, fetch suggestions
+            partial = user_input["from_partial"]
+            def get_suggestions():
+                planner = JournyPlanner(self.hass.data[DOMAIN]["client_id"], self.hass.data[DOMAIN]["secret"])
+                return planner.location_name(partial)
+            suggestions = await self.hass.async_add_executor_job(get_suggestions)
+            choices = {str(i): loc["name"] for i, loc in enumerate(suggestions)}
+            schema = vol.Schema({vol.Required("from_choice"): vol.In(list(choices.values()))})
+            return self.async_show_form(
+                step_id="add_departure_from_select",
+                data_schema=schema,
+                errors=errors,
+                description_placeholders={"matches": ", ".join(choices.values())}
+            )
+        elif user_input is not None and "from_choice" in user_input:
+            # Step 2: User selected a 'from' location, now prompt for destination
+            self._current_departure = {CONF_FROM: user_input["from_choice"]}
+            return await self.async_step_add_departure_destination()
+        # Initial step: ask for partial 'from' name
+        schema = vol.Schema({vol.Required("from_partial"): str})
+        return self.async_show_form(
+            step_id="add_departure",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_add_departure_destination(self, user_input=None):
+        errors = {}
+        if user_input is not None and "destination_partial" in user_input:
+            # Step 1: User entered a partial 'destination' name, fetch suggestions
+            partial = user_input["destination_partial"]
+            def get_suggestions():
+                planner = JournyPlanner(self.hass.data[DOMAIN]["client_id"], self.hass.data[DOMAIN]["secret"])
+                return planner.location_name(partial)
+            suggestions = await self.hass.async_add_executor_job(get_suggestions)
+            choices = {str(i): loc["name"] for i, loc in enumerate(suggestions)}
+            schema = vol.Schema({vol.Required("destination_choice"): vol.In(list(choices.values()))})
+            return self.async_show_form(
+                step_id="add_departure_destination_select",
+                data_schema=schema,
+                errors=errors,
+                description_placeholders={"matches": ", ".join(choices.values())}
+            )
+        elif user_input is not None and "destination_choice" in user_input:
+            # Step 2: User selected a 'destination' location, now prompt for the rest
+            self._current_departure[CONF_DESTINATION] = user_input["destination_choice"]
+            return await self.async_step_add_departure_details()
+        # Initial step: ask for partial 'destination' name
+        schema = vol.Schema({vol.Required("destination_partial"): str})
+        return self.async_show_form(
+            step_id="add_departure_destination",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_add_departure_details(self, user_input=None):
+        errors = {}
+        dep = self._current_departure or {}
         dep_schema = vol.Schema({
-            vol.Required(CONF_FROM): str,
-            vol.Required(CONF_DESTINATION): str,
             vol.Optional(CONF_DELAY, default=DEFAULT_DELAY): int,
             vol.Optional(CONF_HEADING): str,
-            vol.Optional(CONF_LINES, default=""): str,  # Use comma-separated string
-            vol.Optional(CONF_LINES, default=""): str,  # Use comma-separated string
+            vol.Optional(CONF_LINES, default=""): str,
             vol.Optional(CONF_NAME): str,
         })
         if user_input is not None:
-            dep = dict(user_input)
+            dep.update(user_input)
             # Defensive: ensure CONF_LINES is always a list
             if isinstance(dep.get(CONF_LINES), list):
                 dep[CONF_LINES] = [l.strip() for l in dep.get(CONF_LINES) if l.strip()]
             else:
                 dep[CONF_LINES] = [l.strip() for l in dep.get(CONF_LINES, "").split(",") if l.strip()]
             self.departures.append(dep)
+            self._current_departure = None
             return await self.async_step_menu()
         return self.async_show_form(
-            step_id="add_departure",
+            step_id="add_departure_details",
             data_schema=dep_schema,
             errors=errors,
         )
