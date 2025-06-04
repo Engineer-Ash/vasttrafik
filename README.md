@@ -27,7 +27,7 @@ This is a custom Home Assistant integration for Västtrafik journey planning usi
 ```yaml
 sensor:
   - platform: vasttrafik
-    key: YOUR_API_KEY
+    key: YOUR_CLIENT_ID  # This is your Västtrafik client ID
     secret: YOUR_API_SECRET
     departures:
       - from: "Göteborg"
