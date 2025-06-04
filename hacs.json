@@ -1,0 +1,10 @@
+{
+  "name": "Västtrafik Journey Sensor",
+  "content_in_root": false,
+  "domains": ["sensor"],
+  "country": ["se"],
+  "homeassistant": ">=2022.5.0",
+  "render_readme": true,
+  "iot_class": "cloud_polling",
+  "filename": "manifest.json"
+}

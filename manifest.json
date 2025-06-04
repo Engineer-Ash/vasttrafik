@@ -2,10 +2,10 @@
   "domain": "vasttrafik",
   "name": "Västtrafik Journey Sensor",
   "version": "1.0.0",
-  "documentation": "https://github.com/yourusername/vasttrafik-homeassistant",
+  "documentation": "https://github.com/Engineer-Ash/vasttrafik",
   "requirements": ["vasttrafik"],
   "dependencies": [],
-  "codeowners": ["@yourusername"],
+  "codeowners": ["Engineer-Ash"],
   "iot_class": "cloud_polling",
   "config_flow": true
 }

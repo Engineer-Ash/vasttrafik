@@ -20,4 +20,4 @@ Supports both YAML and UI config (config flow).
 
 ## Credits
 - Based on the official Västtrafik API
-- Custom integration by @yourusername
+- Custom integration by Engineer-Ash
