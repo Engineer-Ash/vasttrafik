@@ -59,35 +59,116 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry):
         self.config_entry = config_entry
         self.departures = list(config_entry.options.get(CONF_DEPARTURES, []))
+        self._current_departure = None
+        self._edit_index = None
 
     async def async_step_init(self, user_input=None):
-        return await self.async_step_departures()
+        return await self.async_step_menu()
 
-    async def async_step_departures(self, user_input=None):
+    async def async_step_menu(self, user_input=None):
         errors = {}
-        if user_input is not None:
-            # Validate departures list
-            if not isinstance(user_input[CONF_DEPARTURES], list) or not user_input[CONF_DEPARTURES]:
-                errors[CONF_DEPARTURES] = "empty_departures"
-            else:
-                return self.async_create_entry(title="", data={CONF_DEPARTURES: user_input[CONF_DEPARTURES]})
-
-        departures_schema = vol.Schema({
-            vol.Required(CONF_DEPARTURES, default=self.departures): vol.All(
-                [
-                    {
-                        vol.Required(CONF_FROM): str,
-                        vol.Required(CONF_DESTINATION): str,
-                        vol.Optional(CONF_DELAY, default=DEFAULT_DELAY): int,
-                        vol.Optional(CONF_HEADING): str,
-                        vol.Optional(CONF_LINES, default=[]): [str],
-                        vol.Optional(CONF_NAME): str,
-                    }
-                ]
-            ),
+        options = [
+            ("add", "Add departure"),
+            ("edit", "Edit departure"),
+            ("remove", "Remove departure"),
+            ("finish", "Finish"),
+        ]
+        menu_schema = vol.Schema({
+            vol.Required("action"): vol.In([x[0] for x in options]),
         })
+        if user_input is not None:
+            action = user_input["action"]
+            if action == "add":
+                return await self.async_step_add_departure()
+            elif action == "edit":
+                if not self.departures:
+                    errors["base"] = "no_departures"
+                else:
+                    return await self.async_step_select_edit()
+            elif action == "remove":
+                if not self.departures:
+                    errors["base"] = "no_departures"
+                else:
+                    return await self.async_step_select_remove()
+            elif action == "finish":
+                return self.async_create_entry(title="", data={CONF_DEPARTURES: self.departures})
         return self.async_show_form(
-            step_id="departures",
-            data_schema=departures_schema,
+            step_id="menu",
+            data_schema=menu_schema,
             errors=errors,
+            description_placeholders={
+                "departures": str(self.departures)
+            }
+        )
+
+    async def async_step_add_departure(self, user_input=None):
+        errors = {}
+        dep_schema = vol.Schema({
+            vol.Required(CONF_FROM): str,
+            vol.Required(CONF_DESTINATION): str,
+            vol.Optional(CONF_DELAY, default=DEFAULT_DELAY): int,
+            vol.Optional(CONF_HEADING): str,
+            vol.Optional(CONF_LINES, default=[]): [str],
+            vol.Optional(CONF_NAME): str,
+        })
+        if user_input is not None:
+            self.departures.append(user_input)
+            return await self.async_step_menu()
+        return self.async_show_form(
+            step_id="add_departure",
+            data_schema=dep_schema,
+            errors=errors,
+        )
+
+    async def async_step_select_edit(self, user_input=None):
+        errors = {}
+        choices = {str(i): f"{d.get(CONF_FROM)} → {d.get(CONF_DESTINATION)}" for i, d in enumerate(self.departures)}
+        schema = vol.Schema({vol.Required("edit_index"): vol.In(list(choices.keys()))})
+        if user_input is not None:
+            idx = int(user_input["edit_index"])
+            self._edit_index = idx
+            self._current_departure = self.departures[idx]
+            return await self.async_step_edit_departure()
+        return self.async_show_form(
+            step_id="select_edit",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"choices": str(choices)}
+        )
+
+    async def async_step_edit_departure(self, user_input=None):
+        errors = {}
+        dep = self._current_departure or {}
+        dep_schema = vol.Schema({
+            vol.Required(CONF_FROM, default=dep.get(CONF_FROM, "")): str,
+            vol.Required(CONF_DESTINATION, default=dep.get(CONF_DESTINATION, "")): str,
+            vol.Optional(CONF_DELAY, default=dep.get(CONF_DELAY, DEFAULT_DELAY)): int,
+            vol.Optional(CONF_HEADING, default=dep.get(CONF_HEADING, "")): str,
+            vol.Optional(CONF_LINES, default=dep.get(CONF_LINES, [])): [str],
+            vol.Optional(CONF_NAME, default=dep.get(CONF_NAME, "")): str,
+        })
+        if user_input is not None:
+            self.departures[self._edit_index] = user_input
+            self._current_departure = None
+            self._edit_index = None
+            return await self.async_step_menu()
+        return self.async_show_form(
+            step_id="edit_departure",
+            data_schema=dep_schema,
+            errors=errors,
+        )
+
+    async def async_step_select_remove(self, user_input=None):
+        errors = {}
+        choices = {str(i): f"{d.get(CONF_FROM)} → {d.get(CONF_DESTINATION)}" for i, d in enumerate(self.departures)}
+        schema = vol.Schema({vol.Required("remove_index"): vol.In(list(choices.keys()))})
+        if user_input is not None:
+            idx = int(user_input["remove_index"])
+            self.departures.pop(idx)
+            return await self.async_step_menu()
+        return self.async_show_form(
+            step_id="select_remove",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"choices": str(choices)}
         )
