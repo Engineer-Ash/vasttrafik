@@ -124,7 +124,6 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
                 departure.get(CONF_DELAY),
             )
             for departure in departures
-            for departure in departures
         ]
 
     entities = await hass.async_add_executor_job(create_planner_and_entities)
@@ -212,12 +211,45 @@ class VasttrafikJourneySensor(SensorEntity):
                         self._state = datetime.fromisoformat(dep_time).strftime("%H:%M")
                     except Exception:
                         self._state = dep_time
+
+                    # Build connections as a numbered list
+                    connections = []
+                    for idx, leg in enumerate(legs, 1):
+                        sj = leg.get("serviceJourney", {})
+                        line = sj.get("line", {})
+                        line_name = line.get("shortName") or line.get("name") or "?"
+                        from_name = (
+                            leg.get("origin", {}).get("name")
+                            or leg.get("from", {}).get("name")
+                            or "?"
+                        )
+                        to_name = (
+                            leg.get("destination", {}).get("name")
+                            or leg.get("to", {}).get("name")
+                            or "?"
+                        )
+                        dep = leg.get("plannedDepartureTime")
+                        arr = leg.get("plannedArrivalTime")
+                        dep_fmt = dep[11:16] if dep and len(dep) >= 16 else dep
+                        arr_fmt = arr[11:16] if arr and len(arr) >= 16 else arr
+                        connections.append(f"{idx}. {line_name} from {from_name} to {to_name} ({dep_fmt} → {arr_fmt})")
+                    connections_str = "\n".join(connections)
+
+                    # Final arrival time (last leg's plannedArrivalTime)
+                    final_arrival = legs[-1].get("plannedArrivalTime") if legs else None
+                    try:
+                        final_arrival_fmt = datetime.fromisoformat(final_arrival).strftime("%H:%M") if final_arrival else None
+                    except Exception:
+                        final_arrival_fmt = final_arrival
+
                     params = {
                         ATTR_LINE: line.get("shortName"),
                         ATTR_FROM: self._origin["station_name"],
                         ATTR_TO: self._destination["station_name"],
                         "planned_arrival": arr_time,
                         "direction": service_journey.get("direction"),
+                        "connections": connections_str,
+                        "final_arrival": final_arrival_fmt,
                     }
                     self._attributes = {k: v for k, v in params.items() if v}
                     break
