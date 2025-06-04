@@ -58,6 +58,7 @@ PLATFORM_SCHEMA = SENSOR_PLATFORM_SCHEMA.extend(
                         cv.ensure_list, [cv.string]
                     ),
                     vol.Optional(CONF_NAME): cv.string,
+                    vol.Optional("pause_entity_id"): cv.string,  # Add pause_entity_id option
                 }
             ]
         ),
@@ -82,6 +83,7 @@ async def async_setup_platform(
                 departure.get(CONF_DESTINATION),
                 departure.get(CONF_LINES),
                 departure.get(CONF_DELAY),
+                departure.get("pause_entity_id"),  # Pass pause_entity_id
             )
             for departure in config[CONF_DEPARTURES]
         ],
@@ -122,6 +124,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
                 departure.get(CONF_DESTINATION),
                 departure.get(CONF_LINES),
                 departure.get(CONF_DELAY),
+                departure.get("pause_entity_id"),  # Pass pause_entity_id
             )
             for departure in departures
         ]
@@ -136,7 +139,7 @@ class VasttrafikJourneySensor(SensorEntity):
     _attr_attribution = "Data provided by Västtrafik"
     _attr_icon = "mdi:train"
 
-    def __init__(self, planner, name, origin, destination, lines, delay):
+    def __init__(self, planner, name, origin, destination, lines, delay, pause_entity_id=None):
         """Initialize the sensor."""
         self._planner = planner
         self._name = name or f"{origin} to {destination}"
@@ -147,7 +150,7 @@ class VasttrafikJourneySensor(SensorEntity):
         self._journeys = None
         self._state = None
         self._attributes = None
-        self._pause_entity_id = "input_boolean.pause_vasttrafik_journey"  # You can change this if needed
+        self._pause_entity_id = pause_entity_id  # Use per-sensor pause_entity_id
         self.hass = None  # Will be set in async_added_to_hass
         # Unique ID: hash of origin, destination, lines
         unique = f"{self._origin['station_id']}_{self._destination['station_id']}_{','.join(self._lines) if self._lines else ''}"
@@ -157,6 +160,23 @@ class VasttrafikJourneySensor(SensorEntity):
         self.hass = self._hass if hasattr(self, '_hass') else getattr(self, 'hass', None) or self.hass
         if self.hass is None:
             self.hass = self._hass = getattr(self, 'hass', None)
+        # Auto-create input_boolean if pause_entity_id is set and does not exist
+        if self._pause_entity_id and self.hass:
+            if not self.hass.states.get(self._pause_entity_id):
+                # Extract the name from the entity_id for a friendly name
+                friendly_name = self._pause_entity_id.split(".", 1)[-1].replace("_", " ").title()
+                await self.hass.services.async_call(
+                    "input_boolean",
+                    "create",
+                    {
+                        "name": friendly_name,
+                        "unique_id": self._pause_entity_id,
+                        "icon": "mdi:pause-circle",
+                        "initial": False,
+                        "id": self._pause_entity_id.split(".", 1)[-1],
+                    },
+                    blocking=True,
+                )
 
     def get_station_id(self, location):
         """Get the station ID."""
@@ -186,7 +206,7 @@ class VasttrafikJourneySensor(SensorEntity):
     def update(self) -> None:
         """Get the next journey."""
         # Pause logic: check input_boolean before updating
-        if self.hass:
+        if self._pause_entity_id and self.hass:
             pause = self.hass.states.get(self._pause_entity_id)
             if pause and pause.state == "on":
                 _LOGGER.debug(f"Update paused for {self._name} due to {self._pause_entity_id} being on.")
