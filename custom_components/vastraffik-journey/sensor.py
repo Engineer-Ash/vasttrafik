@@ -160,23 +160,6 @@ class VasttrafikJourneySensor(SensorEntity):
         self.hass = self._hass if hasattr(self, '_hass') else getattr(self, 'hass', None) or self.hass
         if self.hass is None:
             self.hass = self._hass = getattr(self, 'hass', None)
-        # Auto-create input_boolean if pause_entity_id is set and does not exist
-        if self._pause_entity_id and self.hass:
-            if not self.hass.states.get(self._pause_entity_id):
-                # Extract the name from the entity_id for a friendly name
-                friendly_name = self._pause_entity_id.split(".", 1)[-1].replace("_", " ").title()
-                await self.hass.services.async_call(
-                    "input_boolean",
-                    "create",
-                    {
-                        "name": friendly_name,
-                        "unique_id": self._pause_entity_id,
-                        "icon": "mdi:pause-circle",
-                        "initial": False,
-                        "id": self._pause_entity_id.split(".", 1)[-1],
-                    },
-                    blocking=True,
-                )
 
     def get_station_id(self, location):
         """Get the station ID."""
@@ -208,7 +191,28 @@ class VasttrafikJourneySensor(SensorEntity):
         # Pause logic: check input_boolean before updating
         if self._pause_entity_id and self.hass:
             pause = self.hass.states.get(self._pause_entity_id)
-            if pause and pause.state == "on":
+            if pause is None:
+                # Auto-create input_boolean if missing
+                friendly_name = self._pause_entity_id.split(".", 1)[-1].replace("_", " ").title()
+                # Use async_create_task to call async service from sync context
+                import asyncio
+                if hasattr(self.hass, "async_create_task"):
+                    self.hass.async_create_task(
+                        self.hass.services.async_call(
+                            "input_boolean",
+                            "create",
+                            {
+                                "name": friendly_name,
+                                "unique_id": self._pause_entity_id,
+                                "icon": "mdi:pause-circle",
+                                "initial": False,
+                                "id": self._pause_entity_id.split(".", 1)[-1],
+                            },
+                            blocking=True,
+                        )
+                    )
+                _LOGGER.debug(f"Auto-created input_boolean {self._pause_entity_id} for {self._name}.")
+            elif pause.state == "on":
                 _LOGGER.debug(f"Update paused for {self._name} due to {self._pause_entity_id} being on.")
                 return  # Skip update, keep last state/attributes
         try:
