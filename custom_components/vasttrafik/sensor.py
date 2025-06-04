@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 import hashlib
 import logging
 
-import vasttrafik
+from vasttrafik import JournyPlanner, Error
 import voluptuous as vol
 
 from homeassistant.components.sensor import (
@@ -70,7 +70,7 @@ async def async_setup_platform(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> None:
     """Set up the journey sensor from YAML."""
-    planner = vasttrafik.JournyPlanner(config.get(CONF_KEY), config.get(CONF_SECRET))
+    planner = JournyPlanner(config.get(CONF_KEY), config.get(CONF_SECRET))
     async_add_entities(
         [
             VasttrafikJourneySensor(
@@ -102,7 +102,7 @@ def setup_platform(
 async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up the journey sensor from a config entry (UI)."""
     data = entry.data
-    planner = vasttrafik.JournyPlanner(data[CONF_KEY], data[CONF_SECRET])
+    planner = JournyPlanner(data[CONF_KEY], data[CONF_SECRET])
     async_add_entities(
         [
             VasttrafikJourneySensor(
@@ -168,12 +168,12 @@ class VasttrafikJourneySensor(SensorEntity):
     def update(self) -> None:
         """Get the next journey."""
         try:
-            self._journeys = self._planner.journeys(
-                originGid=self._origin["station_id"],
-                destinationGid=self._destination["station_id"],
+            self._journeys = self._planner.trip(
+                origin_id=self._origin["station_id"],
+                dest_id=self._destination["station_id"],
                 date=now() + self._delay,
             )
-        except vasttrafik.Error:
+        except Error:
             _LOGGER.debug("Unable to read journeys, updating token")
             self._planner.update_token()
 

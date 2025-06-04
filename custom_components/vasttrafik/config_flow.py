@@ -3,6 +3,7 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.const import CONF_NAME
 from .sensor import CONF_KEY, CONF_SECRET, CONF_DEPARTURES, CONF_FROM, CONF_DESTINATION, CONF_DELAY, CONF_HEADING, CONF_LINES, DEFAULT_DELAY
+from vasttrafik import JournyPlanner
 import logging
 
 _LOGGER = logging.getLogger(__name__)
@@ -39,11 +40,8 @@ class VasttrafikConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         )
 
     async def _async_validate_credentials(self, key, secret):
-        # Try to import and use the vasttrafik lib to validate credentials
         try:
-            import vasttrafik.custom_components.vasttrafik as vasttrafik
-            planner = vasttrafik.JournyPlanner(key, secret)
-            # Try a simple API call (e.g., get token or locations)
+            planner = JournyPlanner(key, secret)
             await self.hass.async_add_executor_job(lambda: planner.location_name("Göteborg"))
             return True
         except Exception as ex:
