@@ -147,9 +147,16 @@ class VasttrafikJourneySensor(SensorEntity):
         self._journeys = None
         self._state = None
         self._attributes = None
+        self._pause_entity_id = "input_boolean.pause_vasttrafik_journey"  # You can change this if needed
+        self.hass = None  # Will be set in async_added_to_hass
         # Unique ID: hash of origin, destination, lines
         unique = f"{self._origin['station_id']}_{self._destination['station_id']}_{','.join(self._lines) if self._lines else ''}"
         self._attr_unique_id = hashlib.md5(unique.encode()).hexdigest()
+
+    async def async_added_to_hass(self):
+        self.hass = self._hass if hasattr(self, '_hass') else getattr(self, 'hass', None) or self.hass
+        if self.hass is None:
+            self.hass = self._hass = getattr(self, 'hass', None)
 
     def get_station_id(self, location):
         """Get the station ID."""
@@ -178,6 +185,12 @@ class VasttrafikJourneySensor(SensorEntity):
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
     def update(self) -> None:
         """Get the next journey."""
+        # Pause logic: check input_boolean before updating
+        if self.hass:
+            pause = self.hass.states.get(self._pause_entity_id)
+            if pause and pause.state == "on":
+                _LOGGER.debug(f"Update paused for {self._name} due to {self._pause_entity_id} being on.")
+                return  # Skip update, keep last state/attributes
         try:
             self._journeys = self._planner.trip(
                 origin_id=self._origin["station_id"],
