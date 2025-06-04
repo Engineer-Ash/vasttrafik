@@ -104,11 +104,15 @@ def setup_platform(
 async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddEntitiesCallback) -> None:
     """Set up the journey sensor from a config entry (UI)."""
     data = entry.data
+    options = entry.options
+    departures = options.get(CONF_DEPARTURES)
+    if departures is None:
+        departures = data.get(CONF_DEPARTURES)
+    if not departures:
+        _LOGGER.error("No departures found in config entry data or options: %s", {**data, **options})
+        return
 
     def create_planner_and_entities():
-        if CONF_DEPARTURES not in data:
-            _LOGGER.error("No departures found in config entry data: %s", data)
-            return []
         planner = JournyPlanner(data[CONF_CLIENT_ID], data[CONF_SECRET])
         return [
             VasttrafikJourneySensor(
@@ -119,7 +123,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
                 departure.get(CONF_LINES),
                 departure.get(CONF_DELAY),
             )
-            for departure in data[CONF_DEPARTURES]
+            for departure in departures
         ]
 
     entities = await hass.async_add_executor_job(create_planner_and_entities)
