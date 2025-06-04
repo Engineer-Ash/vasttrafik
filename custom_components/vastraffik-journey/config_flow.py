@@ -57,7 +57,6 @@ class VastraffikJourneyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry):
-        self.config_entry = config_entry
         self.departures = list(config_entry.options.get(CONF_DEPARTURES, []))
         self._current_departure = None
         self._edit_index = None
