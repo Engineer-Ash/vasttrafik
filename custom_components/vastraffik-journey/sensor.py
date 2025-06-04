@@ -58,7 +58,7 @@ PLATFORM_SCHEMA = SENSOR_PLATFORM_SCHEMA.extend(
                         cv.ensure_list, [cv.string]
                     ),
                     vol.Optional(CONF_NAME): cv.string,
-                    vol.Optional("pause_entity_id"): cv.string,  # Add pause_entity_id option
+                    vol.Optional("pause_entity_id"): cv.string,
                 }
             ]
         ),
@@ -74,20 +74,42 @@ async def async_setup_platform(
 ) -> None:
     """Set up the journey sensor from YAML."""
     planner = JournyPlanner(config.get(CONF_CLIENT_ID), config.get(CONF_SECRET))
-    async_add_entities(
-        [
-            VasttrafikJourneySensor(
-                planner,
-                departure.get(CONF_NAME),
-                departure.get(CONF_FROM),
-                departure.get(CONF_DESTINATION),
-                departure.get(CONF_LINES),
-                departure.get(CONF_DELAY),
-                departure.get("pause_entity_id"),  # Pass pause_entity_id
-            )
-            for departure in config[CONF_DEPARTURES]
-        ],
-        True,
+    sensors = [
+        VasttrafikJourneySensor(
+            planner,
+            departure.get(CONF_NAME),
+            departure.get(CONF_FROM),
+            departure.get(CONF_DESTINATION),
+            departure.get(CONF_LINES),
+            departure.get(CONF_DELAY),
+            departure.get("pause_entity_id"),
+        )
+        for departure in config[CONF_DEPARTURES]
+    ]
+    async_add_entities(sensors, True)
+
+    async def handle_pause_service(call):
+        entity_id = call.data.get("entity_id")
+        paused = call.data.get("paused")
+        toggle = call.data.get("toggle", False)
+        for sensor in sensors:
+            if sensor.entity_id == entity_id:
+                if toggle:
+                    sensor.toggle_paused()
+                elif paused is not None:
+                    sensor.set_paused(paused)
+
+    hass.services.async_register(
+        "vastraffik_journey",
+        "set_pause",
+        handle_pause_service,
+        schema=vol.Schema(
+            {
+                vol.Required("entity_id"): cv.entity_id,
+                vol.Optional("paused"): bool,
+                vol.Optional("toggle", default=False): bool,
+            }
+        ),
     )
 
 
@@ -124,7 +146,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
                 departure.get(CONF_DESTINATION),
                 departure.get(CONF_LINES),
                 departure.get(CONF_DELAY),
-                departure.get("pause_entity_id"),  # Pass pause_entity_id
+                departure.get("pause_entity_id"),
             )
             for departure in departures
         ]
@@ -150,9 +172,9 @@ class VasttrafikJourneySensor(SensorEntity):
         self._journeys = None
         self._state = None
         self._attributes = None
-        self._pause_entity_id = pause_entity_id  # Use per-sensor pause_entity_id
+        self._pause_entity_id = pause_entity_id
+        self._paused = False  # Internal pause state
         self.hass = None  # Will be set in async_added_to_hass
-        # Unique ID: hash of origin, destination, lines
         unique = f"{self._origin['station_id']}_{self._destination['station_id']}_{','.join(self._lines) if self._lines else ''}"
         self._attr_unique_id = hashlib.md5(unique.encode()).hexdigest()
 
@@ -178,43 +200,29 @@ class VasttrafikJourneySensor(SensorEntity):
     @property
     def extra_state_attributes(self):
         """Return the state attributes."""
-        return self._attributes
+        attrs = self._attributes.copy() if self._attributes else {}
+        attrs["paused"] = self._paused
+        return attrs
 
     @property
     def native_value(self):
         """Return the next journey departure time."""
         return self._state
 
+    def set_paused(self, paused: bool):
+        self._paused = paused
+        self.async_write_ha_state()
+
+    def toggle_paused(self):
+        self._paused = not self._paused
+        self.async_write_ha_state()
+
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
     def update(self) -> None:
         """Get the next journey."""
-        # Pause logic: check input_boolean before updating
-        if self._pause_entity_id and self.hass:
-            pause = self.hass.states.get(self._pause_entity_id)
-            if pause is None:
-                # Auto-create input_boolean if missing
-                friendly_name = self._pause_entity_id.split(".", 1)[-1].replace("_", " ").title()
-                # Use async_create_task to call async service from sync context
-                import asyncio
-                if hasattr(self.hass, "async_create_task"):
-                    self.hass.async_create_task(
-                        self.hass.services.async_call(
-                            "input_boolean",
-                            "create",
-                            {
-                                "name": friendly_name,
-                                "unique_id": self._pause_entity_id,
-                                "icon": "mdi:pause-circle",
-                                "initial": False,
-                                "id": self._pause_entity_id.split(".", 1)[-1],
-                            },
-                            blocking=True,
-                        )
-                    )
-                _LOGGER.debug(f"Auto-created input_boolean {self._pause_entity_id} for {self._name}.")
-            elif pause.state == "on":
-                _LOGGER.debug(f"Update paused for {self._name} due to {self._pause_entity_id} being on.")
-                return  # Skip update, keep last state/attributes
+        if self._paused:
+            _LOGGER.debug(f"Update paused for {self._name} due to internal pause attribute.")
+            return
         try:
             self._journeys = self._planner.trip(
                 origin_id=self._origin["station_id"],
@@ -257,7 +265,6 @@ class VasttrafikJourneySensor(SensorEntity):
                     except Exception:
                         self._state = dep_time
 
-                    # Build connections as a numbered list
                     connections = []
                     for idx, leg in enumerate(legs, 1):
                         sj = leg.get("serviceJourney", {})
@@ -276,7 +283,6 @@ class VasttrafikJourneySensor(SensorEntity):
                         connections.append(f"{idx}. {line_name} from {from_name} to {to_name} ({dep_fmt} → {arr_fmt})")
                     connections_str = "\n".join(connections)
 
-                    # Final arrival time (last leg's plannedArrivalTime)
                     final_arrival = legs[-1].get("plannedArrivalTime") if legs else None
                     try:
                         final_arrival_fmt = datetime.fromisoformat(final_arrival).strftime("%H:%M") if final_arrival else None
