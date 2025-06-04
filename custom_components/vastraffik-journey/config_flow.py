@@ -109,6 +109,7 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Optional(CONF_DELAY, default=DEFAULT_DELAY): int,
             vol.Optional(CONF_HEADING): str,
             vol.Optional(CONF_LINES, default=""): str,  # Use comma-separated string
+            vol.Optional(CONF_LINES, default=""): str,  # Use comma-separated string
             vol.Optional(CONF_NAME): str,
         })
         if user_input is not None:
