@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import hashlib
 import logging
 
 import vasttrafik
@@ -135,6 +136,9 @@ class VasttrafikJourneySensor(SensorEntity):
         self._journeys = None
         self._state = None
         self._attributes = None
+        # Unique ID: hash of origin, destination, lines
+        unique = f"{self._origin['station_id']}_{self._destination['station_id']}_{','.join(self._lines) if self._lines else ''}"
+        self._attr_unique_id = hashlib.md5(unique.encode()).hexdigest()
 
     def get_station_id(self, location):
         """Get the station ID."""
