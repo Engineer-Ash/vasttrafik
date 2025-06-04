@@ -222,6 +222,8 @@ class VasttrafikJourneySensor(SensorEntity):
                         from_name = (
                             leg.get("origin", {}).get("name")
                             or leg.get("from", {}).get("name")
+                            or leg.get("origin", {}).get("stopPoint", {}).get("name")
+                            or leg.get("from", {}).get("stopPoint", {}).get("name")
                             or leg.get("origin")
                             or leg.get("from")
                             or "?"
@@ -230,6 +232,8 @@ class VasttrafikJourneySensor(SensorEntity):
                         to_name = (
                             leg.get("destination", {}).get("name")
                             or leg.get("to", {}).get("name")
+                            or leg.get("destination", {}).get("stopPoint", {}).get("name")
+                            or leg.get("to", {}).get("stopPoint", {}).get("name")
                             or leg.get("destination")
                             or leg.get("to")
                             or "?"
