@@ -218,16 +218,24 @@ class VasttrafikJourneySensor(SensorEntity):
                         sj = leg.get("serviceJourney", {})
                         line = sj.get("line", {})
                         line_name = line.get("shortName") or line.get("name") or "?"
+                        # Robust extraction for from_name
                         from_name = (
                             leg.get("origin", {}).get("name")
                             or leg.get("from", {}).get("name")
+                            or leg.get("origin")
+                            or leg.get("from")
                             or "?"
                         )
+                        # Robust extraction for to_name
                         to_name = (
                             leg.get("destination", {}).get("name")
                             or leg.get("to", {}).get("name")
+                            or leg.get("destination")
+                            or leg.get("to")
                             or "?"
                         )
+                        if from_name == "?" or to_name == "?":
+                            _LOGGER.debug(f"Leg missing stop name: {leg}")
                         dep = leg.get("plannedDepartureTime")
                         arr = leg.get("plannedArrivalTime")
                         dep_fmt = dep[11:16] if dep and len(dep) >= 16 else dep
