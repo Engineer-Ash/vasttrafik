@@ -197,6 +197,14 @@ class VasttrafikJourneySensor(SensorEntity):
             self._state = None
             self._attributes = {}
         else:
+            def extract_stop_name(endpoint):
+                if isinstance(endpoint, dict):
+                    if "name" in endpoint:
+                        return endpoint["name"]
+                    if "stopPoint" in endpoint and "name" in endpoint["stopPoint"]:
+                        return endpoint["stopPoint"]["name"]
+                return str(endpoint) if endpoint else "?"
+
             for journey in self._journeys:
                 legs = journey.get("tripLegs", [])
                 if not legs:
@@ -218,26 +226,10 @@ class VasttrafikJourneySensor(SensorEntity):
                         sj = leg.get("serviceJourney", {})
                         line = sj.get("line", {})
                         line_name = line.get("shortName") or line.get("name") or "?"
-                        # Robust extraction for from_name
-                        from_name = (
-                            leg.get("origin", {}).get("name")
-                            or leg.get("from", {}).get("name")
-                            or leg.get("origin", {}).get("stopPoint", {}).get("name")
-                            or leg.get("from", {}).get("stopPoint", {}).get("name")
-                            or leg.get("origin")
-                            or leg.get("from")
-                            or "?"
-                        )
-                        # Robust extraction for to_name
-                        to_name = (
-                            leg.get("destination", {}).get("name")
-                            or leg.get("to", {}).get("name")
-                            or leg.get("destination", {}).get("stopPoint", {}).get("name")
-                            or leg.get("to", {}).get("stopPoint", {}).get("name")
-                            or leg.get("destination")
-                            or leg.get("to")
-                            or "?"
-                        )
+                        from_endpoint = leg.get("origin") or leg.get("from") or {}
+                        to_endpoint = leg.get("destination") or leg.get("to") or {}
+                        from_name = extract_stop_name(from_endpoint)
+                        to_name = extract_stop_name(to_endpoint)
                         if from_name == "?" or to_name == "?":
                             _LOGGER.debug(f"Leg missing stop name: {leg}")
                         dep = leg.get("plannedDepartureTime")
@@ -260,8 +252,6 @@ class VasttrafikJourneySensor(SensorEntity):
                         ATTR_TO: self._destination["station_name"],
                         "planned_arrival": arr_time,
                         "direction": service_journey.get("direction"),
-                        "connections": connections_str,
-                        "final_arrival": final_arrival_fmt,
                         "connections": connections_str,
                         "final_arrival": final_arrival_fmt,
                     }
