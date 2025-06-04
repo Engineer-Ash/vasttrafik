@@ -57,7 +57,6 @@ class VastraffikJourneyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry):
-        self.config_entry = config_entry
         self.departures = list(config_entry.options.get(CONF_DEPARTURES, []))
         self._current_departure = None
         self._edit_index = None
@@ -144,6 +143,14 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             errors=errors,
         )
 
+    async def async_step_add_departure_from_select(self, user_input=None):
+        """Handle the selection of a 'from' location from the dropdown."""
+        if user_input is not None and "from_choice" in user_input:
+            self._current_departure = {CONF_FROM: user_input["from_choice"]}
+            return await self.async_step_add_departure_destination()
+        # Defensive fallback: go back to add_departure if something goes wrong
+        return await self.async_step_add_departure()
+
     async def async_step_add_departure_destination(self, user_input=None):
         errors = {}
         if user_input is not None and "destination_partial" in user_input:
@@ -178,6 +185,14 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=schema,
             errors=errors,
         )
+
+    async def async_step_add_departure_destination_select(self, user_input=None):
+        """Handle the selection of a 'destination' location from the dropdown."""
+        if user_input is not None and "destination_choice" in user_input:
+            self._current_departure[CONF_DESTINATION] = user_input["destination_choice"]
+            return await self.async_step_add_departure_details()
+        # Defensive fallback: go back to add_departure_destination if something goes wrong
+        return await self.async_step_add_departure_destination()
 
     async def async_step_add_departure_details(self, user_input=None):
         errors = {}

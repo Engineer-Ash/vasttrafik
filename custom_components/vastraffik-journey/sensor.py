@@ -109,7 +109,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
     if departures is None:
         departures = data.get(CONF_DEPARTURES)
     if not departures:
-        _LOGGER.error("No departures found in config entry data or options: %s", {**data, **options})
+        _LOGGER.info("No departures found in config entry data or options: %s", {**data, **options})
         return
 
     def create_planner_and_entities():
