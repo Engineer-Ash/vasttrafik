@@ -108,11 +108,13 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required(CONF_DESTINATION): str,
             vol.Optional(CONF_DELAY, default=DEFAULT_DELAY): int,
             vol.Optional(CONF_HEADING): str,
-            vol.Optional(CONF_LINES, default=[]): [str],
+            vol.Optional(CONF_LINES, default=""): str,  # Use comma-separated string
             vol.Optional(CONF_NAME): str,
         })
         if user_input is not None:
-            self.departures.append(user_input)
+            dep = dict(user_input)
+            dep[CONF_LINES] = [l.strip() for l in dep.get(CONF_LINES, "").split(",") if l.strip()]
+            self.departures.append(dep)
             return await self.async_step_menu()
         return self.async_show_form(
             step_id="add_departure",
@@ -144,11 +146,13 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             vol.Required(CONF_DESTINATION, default=dep.get(CONF_DESTINATION, "")): str,
             vol.Optional(CONF_DELAY, default=dep.get(CONF_DELAY, DEFAULT_DELAY)): int,
             vol.Optional(CONF_HEADING, default=dep.get(CONF_HEADING, "")): str,
-            vol.Optional(CONF_LINES, default=dep.get(CONF_LINES, [])): [str],
+            vol.Optional(CONF_LINES, default=", ".join(dep.get(CONF_LINES, [])) if isinstance(dep.get(CONF_LINES, list)) else dep.get(CONF_LINES, "")): str,  # Show as comma-separated string
             vol.Optional(CONF_NAME, default=dep.get(CONF_NAME, "")): str,
         })
         if user_input is not None:
-            self.departures[self._edit_index] = user_input
+            dep = dict(user_input)
+            dep[CONF_LINES] = [l.strip() for l in dep.get(CONF_LINES, "").split(",") if l.strip()]
+            self.departures[self._edit_index] = dep
             self._current_departure = None
             self._edit_index = None
             return await self.async_step_menu()
