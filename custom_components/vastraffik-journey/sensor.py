@@ -160,6 +160,17 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
     hass.data.setdefault("vastraffik_journey_sensors", []).extend(sensors)
 
 
+def build_sensor_unique_id(dep, idx):
+    origin = dep.get("from")
+    destination = dep.get("destination")
+    lines = dep.get("lines") or []
+    if not origin or not destination:
+        return f"journey_{idx}"
+    unique = f"{origin}_{destination}_{','.join(lines) if lines else ''}"
+    import hashlib
+    return hashlib.md5(unique.encode()).hexdigest()
+
+
 class VasttrafikJourneySensor(SensorEntity):
     """Implementation of a Vasttrafik Journey Sensor."""
 
@@ -186,8 +197,13 @@ class VasttrafikJourneySensor(SensorEntity):
         self._pause_entity_id = pause_entity_id
         self._paused = False  # Internal pause state
         self.hass = None  # Will be set in async_added_to_hass
-        unique = f"{self._origin['station_id']}_{self._destination['station_id']}_{','.join(self._lines) if self._lines else ''}"
-        self._attr_unique_id = hashlib.md5(unique.encode()).hexdigest()
+        # Use the helper for unique_id
+        dep = {
+            "from": origin,
+            "destination": destination,
+            "lines": lines
+        }
+        self._attr_unique_id = build_sensor_unique_id(dep, index)
 
     async def async_added_to_hass(self):
         self.hass = self._hass if hasattr(self, '_hass') else getattr(self, 'hass', None) or self.hass
