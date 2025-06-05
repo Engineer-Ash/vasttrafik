@@ -25,7 +25,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         return False
     # Add update listener to reload on options change
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
-    await hass.config_entries.async_forward_entry_setups(entry, ["sensor"])
+    await hass.config_entries.async_forward_entry_setups(entry, ["sensor", "switch"])
     return True
 
 
@@ -36,4 +36,6 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry):
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    return await hass.config_entries.async_forward_entry_unload(entry, "sensor")
+    unload_ok = await hass.config_entries.async_forward_entry_unload(entry, "sensor")
+    unload_ok_switch = await hass.config_entries.async_forward_entry_unload(entry, "switch")
+    return unload_ok and unload_ok_switch

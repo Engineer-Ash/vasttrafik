@@ -221,7 +221,16 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_select_edit(self, user_input=None):
         errors = {}
-        choices = {str(i): f"{d.get(CONF_FROM)} → {d.get(CONF_DESTINATION)}" for i, d in enumerate(self.departures)}
+        # Build friendly names for each departure
+        choices = {}
+        for i, d in enumerate(self.departures):
+            if d.get(CONF_NAME):
+                label = d[CONF_NAME]
+            elif d.get(CONF_FROM) and d.get(CONF_DESTINATION):
+                label = f"{d.get(CONF_FROM)} → {d.get(CONF_DESTINATION)}"
+            else:
+                label = f"Journey {i+1}"
+            choices[str(i)] = label
         schema = vol.Schema({vol.Required("edit_index"): vol.In(list(choices.keys()))})
         if user_input is not None:
             idx = int(user_input["edit_index"])
@@ -265,7 +274,16 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_select_remove(self, user_input=None):
         errors = {}
-        choices = {str(i): f"{d.get(CONF_FROM)} → {d.get(CONF_DESTINATION)}" for i, d in enumerate(self.departures)}
+        # Build friendly names for each departure
+        choices = {}
+        for i, d in enumerate(self.departures):
+            if d.get(CONF_NAME):
+                label = d[CONF_NAME]
+            elif d.get(CONF_FROM) and d.get(CONF_DESTINATION):
+                label = f"{d.get(CONF_FROM)} → {d.get(CONF_DESTINATION)}"
+            else:
+                label = f"Journey {i+1}"
+            choices[str(i)] = label
         schema = vol.Schema({vol.Required("remove_index"): vol.In(list(choices.keys()))})
         if user_input is not None:
             idx = int(user_input["remove_index"])
