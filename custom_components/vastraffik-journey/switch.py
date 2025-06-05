@@ -60,3 +60,7 @@ class VasttrafikPauseSwitch(SwitchEntity):
                 blocking=True,
             )
             await async_update_entity(self._hass, sensor_entity_id)
+
+    @property
+    def entity_category(self):
+        return EntityCategory.CONFIG
