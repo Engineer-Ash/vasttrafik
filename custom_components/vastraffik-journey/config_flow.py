@@ -230,10 +230,13 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
                 label = f"{d.get(CONF_FROM)} → {d.get(CONF_DESTINATION)}"
             else:
                 label = f"Journey {i+1}"
-            choices[str(i)] = label
-        schema = vol.Schema({vol.Required("edit_index"): vol.In(list(choices.keys()))})
+            # Ensure unique label in case of duplicates
+            while label in choices:
+                label += f" ({i+1})"
+            choices[label] = i
+        schema = vol.Schema({vol.Required("edit_label"): vol.In(list(choices.keys()))})
         if user_input is not None:
-            idx = int(user_input["edit_index"])
+            idx = choices[user_input["edit_label"]]
             self._edit_index = idx
             self._current_departure = self.departures[idx]
             return await self.async_step_edit_departure()
@@ -283,10 +286,13 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
                 label = f"{d.get(CONF_FROM)} → {d.get(CONF_DESTINATION)}"
             else:
                 label = f"Journey {i+1}"
-            choices[str(i)] = label
-        schema = vol.Schema({vol.Required("remove_index"): vol.In(list(choices.keys()))})
+            # Ensure unique label in case of duplicates
+            while label in choices:
+                label += f" ({i+1})"
+            choices[label] = i
+        schema = vol.Schema({vol.Required("remove_label"): vol.In(list(choices.keys()))})
         if user_input is not None:
-            idx = int(user_input["remove_index"])
+            idx = choices[user_input["remove_label"]]
             self.departures.pop(idx)
             return await self.async_step_menu()
         return self.async_show_form(
