@@ -1,5 +1,6 @@
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.entity_component import async_update_entity
+from homeassistant.helpers.entity import EntityCategory
 import logging
 from .sensor import build_sensor_unique_id, CONF_DEPARTURES
 
@@ -24,7 +25,7 @@ class VasttrafikPauseSwitch(SwitchEntity):
         self._attr_unique_id = f"pause_{sensor_unique_id}"
         self._attr_name = f"Pause {name or sensor_unique_id}"
         self._attr_icon = "mdi:pause-circle"
-        self._attr_entity_category = "config"
+        self._attr_entity_category = EntityCategory.CONFIG
         self._hass = hass
 
     @property
