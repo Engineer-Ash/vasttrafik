@@ -137,7 +137,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
         _LOGGER.info("No departures found in config entry data or options: %s", {**data, **options})
         return
 
-    def create_planner_and_entities():
+    def create_sensors():
         planner = JournyPlanner(data[CONF_CLIENT_ID], data[CONF_SECRET])
         sensors = []
         for idx, departure in enumerate(departures):
@@ -154,8 +154,10 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
             sensors.append(sensor)
         return sensors
 
-    entities = await hass.async_add_executor_job(create_planner_and_entities)
-    async_add_entities(entities, True)
+    sensors = await hass.async_add_executor_job(create_sensors)
+    async_add_entities(sensors, True)
+    # Store sensors in hass.data for switch platform
+    hass.data.setdefault("vastraffik_journey_sensors", []).extend(sensors)
 
 
 class VasttrafikJourneySensor(SensorEntity):
