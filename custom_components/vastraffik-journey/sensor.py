@@ -222,17 +222,19 @@ class VasttrafikJourneySensor(SensorEntity):
 
     def set_paused(self, paused: bool):
         self._paused = paused
-        self.async_schedule_update_ha_state()
+        # When pausing, do not trigger a new update, just write state
+        self.async_write_ha_state()
 
     def toggle_paused(self):
         self._paused = not self._paused
-        self.async_schedule_update_ha_state()
+        self.async_write_ha_state()
 
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
     def update(self) -> None:
         """Get the next journey."""
         if self._paused:
             _LOGGER.debug(f"Update paused for {self._name} due to internal pause attribute.")
+            # Do not update state or attributes if paused
             return
         try:
             self._journeys = self._planner.trip(
