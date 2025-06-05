@@ -4,6 +4,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 from typing import Any
+from homeassistant.helpers.entity import Entity
 
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
@@ -12,6 +13,31 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
     if config.get("vastraffik_journey"):
         hass.data.setdefault("vastraffik_journey", {})
         hass.data["vastraffik_journey"]["yaml_config"] = config["vastraffik_journey"]
+    # Register the pause service globally
+    async def handle_pause_service(call):
+        entity_id = call.data.get("entity_id")
+        paused = call.data.get("paused")
+        toggle = call.data.get("toggle", False)
+        # Find the entity and call set_paused or toggle_paused
+        entity: Entity = None
+        for ent in hass.states.async_entity_ids("sensor"):
+            ent_obj = hass.data.get("entity_components", {}).get("sensor", None)
+            if ent_obj:
+                entity = ent_obj.get_entity(ent)
+                if entity and entity.entity_id == entity_id:
+                    break
+        if entity:
+            if toggle:
+                entity.toggle_paused()
+            elif paused is not None:
+                entity.set_paused(paused)
+            entity.async_write_ha_state()
+    hass.services.async_register(
+        "vastraffik_journey",
+        "set_pause",
+        handle_pause_service,
+        schema=None,
+    )
     return True
 
 

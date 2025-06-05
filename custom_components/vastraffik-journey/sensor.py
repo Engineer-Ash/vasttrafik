@@ -89,30 +89,6 @@ async def async_setup_platform(
         sensors.append(sensor)
     async_add_entities(sensors, True)
 
-    async def handle_pause_service(call):
-        entity_id = call.data.get("entity_id")
-        paused = call.data.get("paused")
-        toggle = call.data.get("toggle", False)
-        for sensor in sensors:
-            if sensor.entity_id == entity_id:
-                if toggle:
-                    sensor.toggle_paused()
-                elif paused is not None:
-                    sensor.set_paused(paused)
-
-    hass.services.async_register(
-        "vastraffik_journey",
-        "set_pause",
-        handle_pause_service,
-        schema=vol.Schema(
-            {
-                vol.Required("entity_id"): cv.entity_id,
-                vol.Optional("paused"): bool,
-                vol.Optional("toggle", default=False): bool,
-            }
-        ),
-    )
-
 
 def setup_platform(
     hass: HomeAssistant,
