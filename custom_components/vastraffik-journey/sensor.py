@@ -13,6 +13,7 @@ from homeassistant.components.sensor import (
     PLATFORM_SCHEMA as SENSOR_PLATFORM_SCHEMA,
     SensorEntity,
 )
+from homeassistant.components.switch import SwitchEntity
 from homeassistant.const import CONF_DELAY, CONF_NAME
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import config_validation as cv
@@ -74,8 +75,10 @@ async def async_setup_platform(
 ) -> None:
     """Set up the journey sensor from YAML."""
     planner = JournyPlanner(config.get(CONF_CLIENT_ID), config.get(CONF_SECRET))
-    sensors = [
-        VasttrafikJourneySensor(
+    sensors = []
+    switches = []
+    for idx, departure in enumerate(config[CONF_DEPARTURES]):
+        sensor = VasttrafikJourneySensor(
             planner,
             departure.get(CONF_NAME),
             departure.get(CONF_FROM),
@@ -83,10 +86,11 @@ async def async_setup_platform(
             departure.get(CONF_LINES),
             departure.get(CONF_DELAY),
             departure.get("pause_entity_id"),
+            index=idx,  # Pass index to sensor
         )
-        for departure in config[CONF_DEPARTURES]
-    ]
-    async_add_entities(sensors, True)
+        sensors.append(sensor)
+        switches.append(VasttrafikPauseSwitch(sensor, idx))
+    async_add_entities(sensors + switches, True)
 
     async def handle_pause_service(call):
         entity_id = call.data.get("entity_id")
@@ -138,8 +142,10 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
 
     def create_planner_and_entities():
         planner = JournyPlanner(data[CONF_CLIENT_ID], data[CONF_SECRET])
-        return [
-            VasttrafikJourneySensor(
+        sensors = []
+        switches = []
+        for idx, departure in enumerate(departures):
+            sensor = VasttrafikJourneySensor(
                 planner,
                 departure.get(CONF_NAME),
                 departure.get(CONF_FROM),
@@ -147,9 +153,11 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
                 departure.get(CONF_LINES),
                 departure.get(CONF_DELAY),
                 departure.get("pause_entity_id"),
+                index=idx,  # Pass index to sensor
             )
-            for departure in departures
-        ]
+            sensors.append(sensor)
+            switches.append(VasttrafikPauseSwitch(sensor, idx))
+        return sensors + switches
 
     entities = await hass.async_add_executor_job(create_planner_and_entities)
     async_add_entities(entities, True)
@@ -161,10 +169,16 @@ class VasttrafikJourneySensor(SensorEntity):
     _attr_attribution = "Data provided by Västtrafik"
     _attr_icon = "mdi:train"
 
-    def __init__(self, planner, name, origin, destination, lines, delay, pause_entity_id=None):
+    def __init__(self, planner, name, origin, destination, lines, delay, pause_entity_id=None, index=None):
         """Initialize the sensor."""
         self._planner = planner
-        self._name = name or f"{origin} to {destination}"
+        # Use index-based name if no custom name is provided
+        if name:
+            self._name = name
+        elif index is not None:
+            self._name = f"Journey {index + 1}"
+        else:
+            self._name = f"{origin} to {destination}"
         self._origin = self.get_station_id(origin)
         self._destination = self.get_station_id(destination)
         self._lines = lines if lines else None
@@ -300,3 +314,21 @@ class VasttrafikJourneySensor(SensorEntity):
                     }
                     self._attributes = {k: v for k, v in params.items() if v}
                     break
+
+
+class VasttrafikPauseSwitch(SwitchEntity):
+    """Switch to pause/unpause a VasttrafikJourneySensor."""
+    def __init__(self, sensor: VasttrafikJourneySensor, index: int):
+        self._sensor = sensor
+        self._index = index
+        self._attr_unique_id = f"pause_{sensor._attr_unique_id}"
+    @property
+    def name(self):
+        return f"Pause {self._sensor.name}"
+    @property
+    def is_on(self):
+        return self._sensor._paused
+    async def async_turn_on(self, **kwargs):
+        self._sensor.set_paused(True)
+    async def async_turn_off(self, **kwargs):
+        self._sensor.set_paused(False)
