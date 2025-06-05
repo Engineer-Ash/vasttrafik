@@ -2,10 +2,10 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.entity_component import async_update_entity
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    # Get all journey sensor entity_ids from entity registry
+    # Get all journey sensor entity_ids for this config entry from entity registry
     entity_registry = await hass.helpers.entity_registry.async_get_registry()
     sensor_entity_ids = [entity.entity_id for entity in entity_registry.entities.values()
-                        if entity.platform == 'vastraffik-journey' and entity.domain == 'sensor']
+                        if entity.domain == 'sensor' and entity.config_entry_id == entry.entry_id]
     switches = [VasttrafikPauseSwitch(entity_id) for entity_id in sensor_entity_ids]
     async_add_entities(switches, True)
 
