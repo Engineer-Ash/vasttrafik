@@ -1,14 +1,21 @@
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.entity_component import async_update_entity
+import logging
+from .sensor import build_sensor_unique_id, CONF_DEPARTURES
+
+_LOGGER = logging.getLogger(__name__)
 
 async def async_setup_entry(hass, entry, async_add_entities):
-    # Create a switch for each journey in the config entry
-    departures = entry.options.get("departures") or entry.data.get("departures", [])
+    # Use the correct key for departures
+    departures = entry.options.get(CONF_DEPARTURES) or entry.data.get(CONF_DEPARTURES, [])
+    _LOGGER.debug(f"Setting up switches for departures: {departures}")
     switches = []
     for idx, dep in enumerate(departures):
-        from .sensor import build_sensor_unique_id
         unique_id = build_sensor_unique_id(dep, idx)
+        _LOGGER.debug(f"Creating switch for journey idx={idx}, unique_id={unique_id}, dep={dep}")
         switches.append(VasttrafikPauseSwitch(unique_id, dep.get("name"), hass))
+    if not switches:
+        _LOGGER.warning("No switches created: departures list was empty or not found.")
     async_add_entities(switches, True)
 
 class VasttrafikPauseSwitch(SwitchEntity):
