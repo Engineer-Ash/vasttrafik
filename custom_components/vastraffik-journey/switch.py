@@ -1,6 +1,7 @@
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.entity_component import async_update_entity
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers import entity_registry as er
 import logging
 from .sensor import build_sensor_unique_id, CONF_DEPARTURES
 
@@ -44,7 +45,7 @@ class VasttrafikPauseSwitch(SwitchEntity):
         await self._call_pause_service(False)
 
     def _find_sensor_entity_id(self):
-        ent_reg = self._hass.helpers.entity_registry.async_get(self._hass)
+        ent_reg = er.async_get(self._hass)
         for entity in ent_reg.entities.values():
             if entity.unique_id == self._sensor_unique_id:
                 return entity.entity_id
