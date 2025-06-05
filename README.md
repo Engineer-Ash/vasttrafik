@@ -1,33 +1,31 @@
-# vasttrafik
-Implementation of the vasttrafik api for HACS
+# Västtrafik Journey Sensor (Home Assistant Custom Integration)
 
-# Västtrafik Journey Sensor (HACS)
-
-This is a custom Home Assistant integration for Västtrafik journey planning using the Travel Planner v4 API.
+A Home Assistant custom integration for Västtrafik journey planning using the official Travel Planner v4 API.
 
 ## Features
-- Journey-based public transport sensor
+- Journey-based public transport sensors
 - Uses Västtrafik's official API
 - Supports multiple departures, lines, and destinations
 - UI-based configuration (config flow) and YAML support
 - Unique entity IDs for registry support
+- Pause/resume updates for each journey via switch entity
 
 ## Installation
-1. Copy the `vasttrafik` folder to your `custom_components` directory, or add this repository as a custom repository in HACS (type: Integration).
+1. Add this repository as a custom repository in HACS (type: Integration), or copy the `vastraffik-journey` folder to your `custom_components` directory.
 2. Restart Home Assistant.
-3. Add the integration via the Home Assistant UI (recommended) or YAML.
+3. Add the integration via Home Assistant UI (Settings → Devices & Services → Add Integration → Västtrafik Journey).
 
 ## Configuration
 ### UI (Recommended)
-- Go to Home Assistant > Settings > Devices & Services > Add Integration > Västtrafik.
-- Enter your API key and secret.
-- Add departures via the options menu after setup.
+- Go to Home Assistant > Settings > Devices & Services > Add Integration > Västtrafik Journey.
+- Enter your API client ID and secret.
+- Add departures via the options menu after setup (Settings → Devices & Services → Västtrafik Journey → Configure).
 
-### YAML (Legacy)
+### YAML (Legacy, not recommended)
 ```yaml
 sensor:
-  - platform: vasttrafik
-    key: YOUR_CLIENT_ID  # This is your Västtrafik client ID
+  - platform: vastraffik_journey
+    client_id: YOUR_CLIENT_ID  # Your Västtrafik client ID
     secret: YOUR_API_SECRET
     departures:
       - from: "Göteborg"
@@ -37,10 +35,37 @@ sensor:
         name: "To Borås"
 ```
 
+## Example Home Assistant Dashboard Card
+Display your journey sensor, its attributes, and the pause switch in a dashboard Entities card:
+
+```yaml
+type: entities
+entities:
+  - entity: sensor.vastraffik_journey_1  # Replace with your actual journey sensor entity_id
+    name: Next Departure
+  - type: attribute
+    entity: sensor.vastraffik_journey_1
+    attribute: connections
+    name: Connections
+  - type: attribute
+    entity: sensor.vastraffik_journey_1
+    attribute: final_arrival
+    name: Final Arrival
+  - entity: switch.pause_vastraffik_journey_1  # This switch allows you to pause/unpause updates for this journey
+# Optionally, you can adjust grid_options and title as needed:
+grid_options:
+  columns: 48
+  rows: auto
+title: Your Journey Title
+```
+Replace `vastraffik_journey_1` with your actual journey sensor entity ID (e.g., `sensor.vastraffik_journey_1`).
+
 ## Troubleshooting
 - Ensure your API credentials are correct and have access to the Västtrafik Travel Planner v4 API.
-- If you see errors about credentials, re-check your API key/secret.
+- If you see errors about credentials, re-check your API client ID and secret.
 - At least one departure must be configured in the options flow.
+- Pause switches are named like `switch.pause_vastraffik_journey_1`, etc.
+- Use the UI to add, edit, or remove journeys and to control the pause state.
 
 ## Credits
 - Based on the official Västtrafik API
