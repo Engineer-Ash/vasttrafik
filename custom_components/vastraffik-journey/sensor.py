@@ -222,11 +222,11 @@ class VasttrafikJourneySensor(SensorEntity):
 
     def set_paused(self, paused: bool):
         self._paused = paused
-        self.async_write_ha_state()
+        self.async_schedule_update_ha_state()
 
     def toggle_paused(self):
         self._paused = not self._paused
-        self.async_write_ha_state()
+        self.async_schedule_update_ha_state()
 
     @Throttle(MIN_TIME_BETWEEN_UPDATES)
     def update(self) -> None:
