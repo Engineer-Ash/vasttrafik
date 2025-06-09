@@ -6,6 +6,7 @@ A Home Assistant custom integration for Västtrafik journey planning using the o
 - Journey-based public transport sensors
 - Uses Västtrafik's official API
 - Supports multiple departures, lines, and destinations
+- **Journey list sensor**: List all departures/arrivals for a route in a configurable time window (e.g., all buses from A to B between 6am and 9am)
 - UI-based configuration (config flow) and YAML support
 - Unique entity IDs for registry support
 - Pause/resume updates for each journey via switch entity
@@ -25,7 +26,7 @@ A Home Assistant custom integration for Västtrafik journey planning using the o
 ```yaml
 sensor:
   - platform: vastraffik_journey
-    client_id: YOUR_CLIENT_ID  # Your Västtrafik client ID
+    client_id: YOUR_CLIENT_ID
     secret: YOUR_API_SECRET
     departures:
       - from: "Göteborg"
@@ -33,6 +34,14 @@ sensor:
         delay: 0
         lines: ["100"]
         name: "To Borås"
+    journey_list_sensors:
+      - from: "Göteborg"
+        destination: "Borås"
+        lines: ["100"]
+        name: "Morning Buses"
+        list_start_time: "06:00"
+        list_end_time: "09:00"
+        list_time_relates_to: "departure"  # or "arrival"
 ```
 
 ## Example Home Assistant Dashboard Card
@@ -52,6 +61,10 @@ entities:
     attribute: final_arrival
     name: Final Arrival
   - entity: switch.pause_vastraffik_journey_1  # This switch allows you to pause/unpause updates for this journey
+  - type: attribute
+    entity: sensor.morning_buses  # Example journey list sensor
+    attribute: journeys
+    name: Morning Departures
 # Optionally, you can adjust grid_options and title as needed:
 grid_options:
   columns: 48

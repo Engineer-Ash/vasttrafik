@@ -20,6 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.typing import ConfigType, DiscoveryInfoType
 from homeassistant.util import Throttle
 from homeassistant.util.dt import now
+from homeassistant.helpers.entity_registry import async_get as async_get_entity_registry
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -38,6 +39,9 @@ CONF_HEADING = "heading"
 CONF_LINES = "lines"
 CONF_CLIENT_ID = "client_id"
 CONF_SECRET = "secret"
+CONF_LIST_START_TIME = "list_start_time"
+CONF_LIST_END_TIME = "list_end_time"
+CONF_LIST_TIME_RELATES_TO = "list_time_relates_to"  # 'departure' or 'arrival'
 
 DEFAULT_DELAY = 0
 
@@ -59,6 +63,19 @@ PLATFORM_SCHEMA = SENSOR_PLATFORM_SCHEMA.extend(
                     ),
                     vol.Optional(CONF_NAME): cv.string,
                     vol.Optional("pause_entity_id"): cv.string,
+                }
+            ]
+        ),
+        vol.Optional("journey_list_sensors", default=[]): vol.All(
+            [
+                {
+                    vol.Required(CONF_FROM): cv.string,
+                    vol.Required(CONF_DESTINATION): cv.string,
+                    vol.Optional(CONF_LINES, default=[]): vol.All(cv.ensure_list, [cv.string]),
+                    vol.Optional(CONF_NAME): cv.string,
+                    vol.Required(CONF_LIST_START_TIME): cv.string,  # e.g. '06:00'
+                    vol.Required(CONF_LIST_END_TIME): cv.string,    # e.g. '09:00'
+                    vol.Optional(CONF_LIST_TIME_RELATES_TO, default="departure"): vol.In(["departure", "arrival"]),
                 }
             ]
         ),
@@ -87,6 +104,21 @@ async def async_setup_platform(
             index=idx,  # Pass index to sensor
         )
         sensors.append(sensor)
+    # Add journey list sensors
+    journey_list_sensors = config.get("journey_list_sensors", [])
+    for idx, sensor_conf in enumerate(journey_list_sensors):
+        sensor = VasttrafikJourneyListSensor(
+            planner,
+            sensor_conf.get(CONF_NAME),
+            sensor_conf.get(CONF_FROM),
+            sensor_conf.get(CONF_DESTINATION),
+            sensor_conf.get(CONF_LINES),
+            sensor_conf.get(CONF_LIST_START_TIME),
+            sensor_conf.get(CONF_LIST_END_TIME),
+            sensor_conf.get(CONF_LIST_TIME_RELATES_TO, "departure"),
+            index=idx,
+        )
+        sensors.append(sensor)
     async_add_entities(sensors, True)
 
 
@@ -112,6 +144,37 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
     if not departures:
         _LOGGER.info("No departures found in config entry data or options: %s", {**data, **options})
         return
+
+    # --- Remove orphaned sensors and switches if any attribute except pause is changed ---
+    entity_registry = await async_get_entity_registry(hass)
+    sensor_domain = "sensor"
+    switch_domain = "switch"
+    current_sensor_unique_ids = set()
+    current_switch_unique_ids = set()
+    for idx, dep in enumerate(departures):
+        current_sensor_unique_ids.add(build_sensor_unique_id(dep, idx))
+        current_switch_unique_ids.add(f"pause_{build_sensor_unique_id(dep, idx)}")
+
+    # Remove orphaned sensors and their linked pause switches
+    for entity in list(entity_registry.entities.values()):
+        # Remove orphaned sensors
+        if entity.domain == sensor_domain and entity.config_entry_id == entry.entry_id:
+            if entity.unique_id not in current_sensor_unique_ids:
+                _LOGGER.info(f"Removing orphaned sensor entity: {entity.entity_id} (unique_id={entity.unique_id})")
+                entity_registry.async_remove(entity.entity_id)
+                # Also remove linked pause switch if it exists
+                pause_switch_unique_id = f"pause_{entity.unique_id}"
+                for sw_entity in list(entity_registry.entities.values()):
+                    if sw_entity.domain == switch_domain and sw_entity.unique_id == pause_switch_unique_id:
+                        _LOGGER.info(f"Removing orphaned pause switch: {sw_entity.entity_id} (unique_id={sw_entity.unique_id})")
+                        entity_registry.async_remove(sw_entity.entity_id)
+        # Remove orphaned pause switches (if their linked sensor is gone)
+        if entity.domain == switch_domain and entity.config_entry_id == entry.entry_id:
+            # If the corresponding sensor unique_id does not exist, remove the switch
+            linked_sensor_unique_id = entity.unique_id.replace("pause_", "", 1)
+            if linked_sensor_unique_id not in current_sensor_unique_ids:
+                _LOGGER.info(f"Removing orphaned pause switch (no linked sensor): {entity.entity_id} (unique_id={entity.unique_id})")
+                entity_registry.async_remove(entity.entity_id)
 
     def create_sensors():
         planner = JournyPlanner(data[CONF_CLIENT_ID], data[CONF_SECRET])
@@ -305,3 +368,73 @@ class VasttrafikJourneySensor(SensorEntity):
                     }
                     self._attributes = {k: v for k, v in params.items() if v}
                     break
+
+
+class VasttrafikJourneyListSensor(SensorEntity):
+    """Sensor that lists all journeys for a route in a time window."""
+    _attr_icon = "mdi:bus-clock"
+    _attr_attribution = "Data provided by Västtrafik"
+
+    def __init__(self, planner, name, origin, destination, lines, start_time, end_time, time_relates_to, index=None):
+        self._planner = planner
+        self._name = name or f"Journeys {origin} to {destination}"
+        self._origin = origin
+        self._destination = destination
+        self._lines = lines if lines else None
+        self._start_time = start_time
+        self._end_time = end_time
+        self._time_relates_to = time_relates_to
+        self._state = None
+        self._attributes = {}
+        self._attr_unique_id = f"journeylist_{origin}_{destination}_{start_time}_{end_time}_{time_relates_to}_{index}"
+
+    @property
+    def name(self):
+        return self._name
+
+    @property
+    def extra_state_attributes(self):
+        return self._attributes
+
+    @property
+    def native_value(self):
+        return self._state
+
+    @Throttle(MIN_TIME_BETWEEN_UPDATES)
+    def update(self):
+        # Get all journeys for the day in the specified window
+        now_dt = now().replace(second=0, microsecond=0)
+        today = now_dt.date()
+        start_dt = datetime.combine(today, datetime.strptime(self._start_time, "%H:%M").time())
+        end_dt = datetime.combine(today, datetime.strptime(self._end_time, "%H:%M").time())
+        journeys = []
+        dt = start_dt
+        while dt <= end_dt:
+            try:
+                results = self._planner.trip(
+                    origin_id=self._origin,
+                    dest_id=self._destination,
+                    date=dt,
+                    dateTimeRelatesTo=self._time_relates_to,
+                )
+                for journey in results:
+                    main_leg = next((l for l in journey.get("tripLegs", []) if l.get("serviceJourney")), None)
+                    if not main_leg:
+                        continue
+                    line = main_leg.get("serviceJourney", {}).get("line", {})
+                    if self._lines and line.get("shortName") not in self._lines:
+                        continue
+                    dep_time = main_leg.get("plannedDepartureTime")
+                    arr_time = main_leg.get("plannedArrivalTime")
+                    journeys.append({
+                        "departure": dep_time,
+                        "arrival": arr_time,
+                        "line": line.get("shortName"),
+                        "direction": main_leg.get("serviceJourney", {}).get("direction"),
+                    })
+            except Exception as ex:
+                _LOGGER.warning(f"Failed to fetch journey at {dt}: {ex}")
+            # Increment by 5 minutes (or as needed)
+            dt += timedelta(minutes=5)
+        self._attributes = {"journeys": journeys}
+        self._state = len(journeys)

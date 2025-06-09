@@ -2,7 +2,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.const import CONF_NAME
-from .sensor import CONF_CLIENT_ID, CONF_SECRET, CONF_DEPARTURES, CONF_FROM, CONF_DESTINATION, CONF_DELAY, CONF_HEADING, CONF_LINES, DEFAULT_DELAY
+from .sensor import CONF_CLIENT_ID, CONF_SECRET, CONF_DEPARTURES, CONF_FROM, CONF_DESTINATION, CONF_DELAY, CONF_HEADING, CONF_LINES, DEFAULT_DELAY, CONF_LIST_START_TIME, CONF_LIST_END_TIME, CONF_LIST_TIME_RELATES_TO
 from vasttrafik import JournyPlanner
 import logging
 
@@ -58,8 +58,11 @@ class VastraffikJourneyConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry):
         self.departures = list(config_entry.options.get(CONF_DEPARTURES, []))
+        self.journey_list_sensors = list(config_entry.options.get("journey_list_sensors", []))
         self._current_departure = None
         self._edit_index = None
+        self._current_list_sensor = None
+        self._edit_list_index = None
 
     def _get_credentials(self):
         # Prefer options, fallback to data
@@ -78,6 +81,9 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             ("add", "Add departure"),
             ("edit", "Edit departure"),
             ("remove", "Remove departure"),
+            ("add_list", "Add journey list sensor"),
+            ("edit_list", "Edit journey list sensor"),
+            ("remove_list", "Remove journey list sensor"),
             ("finish", "Finish"),
         ]
         menu_schema = vol.Schema({
@@ -97,14 +103,27 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
                     errors["base"] = "no_departures"
                 else:
                     return await self.async_step_select_remove()
+            elif action == "add_list":
+                return await self.async_step_add_list_sensor()
+            elif action == "edit_list":
+                if not self.journey_list_sensors:
+                    errors["base"] = "no_list_sensors"
+                else:
+                    return await self.async_step_select_edit_list()
+            elif action == "remove_list":
+                if not self.journey_list_sensors:
+                    errors["base"] = "no_list_sensors"
+                else:
+                    return await self.async_step_select_remove_list()
             elif action == "finish":
-                return self.async_create_entry(title="", data={CONF_DEPARTURES: self.departures})
+                return self.async_create_entry(title="", data={CONF_DEPARTURES: self.departures, "journey_list_sensors": self.journey_list_sensors})
         return self.async_show_form(
             step_id="menu",
             data_schema=menu_schema,
             errors=errors,
             description_placeholders={
-                "departures": str(self.departures)
+                "departures": str(self.departures),
+                "list_sensors": str(self.journey_list_sensors)
             }
         )
 
@@ -300,4 +319,96 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             data_schema=schema,
             errors=errors,
             description_placeholders={"choices": str(choices)}
+        )
+
+    async def async_step_add_list_sensor(self, user_input=None):
+        errors = {}
+        schema = vol.Schema({
+            vol.Required(CONF_FROM): str,
+            vol.Required(CONF_DESTINATION): str,
+            vol.Optional(CONF_LINES, default=""): str,
+            vol.Optional(CONF_NAME): str,
+            vol.Required(CONF_LIST_START_TIME): str,
+            vol.Required(CONF_LIST_END_TIME): str,
+            vol.Optional(CONF_LIST_TIME_RELATES_TO, default="departure"): vol.In(["departure", "arrival"]),
+        })
+        if user_input is not None:
+            lines = [l.strip() for l in user_input.get(CONF_LINES, "").split(",") if l.strip()]
+            sensor = {
+                CONF_FROM: user_input[CONF_FROM],
+                CONF_DESTINATION: user_input[CONF_DESTINATION],
+                CONF_LINES: lines,
+                CONF_NAME: user_input.get(CONF_NAME, ""),
+                CONF_LIST_START_TIME: user_input[CONF_LIST_START_TIME],
+                CONF_LIST_END_TIME: user_input[CONF_LIST_END_TIME],
+                CONF_LIST_TIME_RELATES_TO: user_input.get(CONF_LIST_TIME_RELATES_TO, "departure"),
+            }
+            self.journey_list_sensors.append(sensor)
+            return await self.async_step_menu()
+        return self.async_show_form(
+            step_id="add_list_sensor",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_select_edit_list(self, user_input=None):
+        errors = {}
+        choices = {f"{ls.get(CONF_NAME) or ls.get(CONF_FROM) + '→' + ls.get(CONF_DESTINATION)}": i for i, ls in enumerate(self.journey_list_sensors)}
+        schema = vol.Schema({vol.Required("edit_list_label"): vol.In(list(choices.keys()))})
+        if user_input is not None:
+            idx = choices[user_input["edit_list_label"]]
+            self._edit_list_index = idx
+            self._current_list_sensor = self.journey_list_sensors[idx]
+            return await self.async_step_edit_list_sensor()
+        return self.async_show_form(
+            step_id="select_edit_list",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_edit_list_sensor(self, user_input=None):
+        errors = {}
+        ls = self._current_list_sensor or {}
+        schema = vol.Schema({
+            vol.Required(CONF_FROM, default=ls.get(CONF_FROM, "")): str,
+            vol.Required(CONF_DESTINATION, default=ls.get(CONF_DESTINATION, "")): str,
+            vol.Optional(CONF_LINES, default=", ".join(ls.get(CONF_LINES, [])) if isinstance(ls.get(CONF_LINES), list) else str(ls.get(CONF_LINES, ""))): str,
+            vol.Optional(CONF_NAME, default=ls.get(CONF_NAME, "")): str,
+            vol.Required(CONF_LIST_START_TIME, default=ls.get(CONF_LIST_START_TIME, "06:00")): str,
+            vol.Required(CONF_LIST_END_TIME, default=ls.get(CONF_LIST_END_TIME, "09:00")): str,
+            vol.Optional(CONF_LIST_TIME_RELATES_TO, default=ls.get(CONF_LIST_TIME_RELATES_TO, "departure")): vol.In(["departure", "arrival"]),
+        })
+        if user_input is not None:
+            lines = [l.strip() for l in user_input.get(CONF_LINES, "").split(",") if l.strip()]
+            ls = {
+                CONF_FROM: user_input[CONF_FROM],
+                CONF_DESTINATION: user_input[CONF_DESTINATION],
+                CONF_LINES: lines,
+                CONF_NAME: user_input.get(CONF_NAME, ""),
+                CONF_LIST_START_TIME: user_input[CONF_LIST_START_TIME],
+                CONF_LIST_END_TIME: user_input[CONF_LIST_END_TIME],
+                CONF_LIST_TIME_RELATES_TO: user_input.get(CONF_LIST_TIME_RELATES_TO, "departure"),
+            }
+            self.journey_list_sensors[self._edit_list_index] = ls
+            self._current_list_sensor = None
+            self._edit_list_index = None
+            return await self.async_step_menu()
+        return self.async_show_form(
+            step_id="edit_list_sensor",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_select_remove_list(self, user_input=None):
+        errors = {}
+        choices = {f"{ls.get(CONF_NAME) or ls.get(CONF_FROM) + '→' + ls.get(CONF_DESTINATION)}": i for i, ls in enumerate(self.journey_list_sensors)}
+        schema = vol.Schema({vol.Required("remove_list_label"): vol.In(list(choices.keys()))})
+        if user_input is not None:
+            idx = choices[user_input["remove_list_label"]]
+            self.journey_list_sensors.pop(idx)
+            return await self.async_step_menu()
+        return self.async_show_form(
+            step_id="select_remove_list",
+            data_schema=schema,
+            errors=errors,
         )
