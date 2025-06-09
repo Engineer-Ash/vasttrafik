@@ -416,13 +416,11 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             import pytz
             # Helper to parse and convert to RFC 3339 in Europe/Stockholm
             def parse_time_to_rfc3339(timestr):
-                # Accept '16' or '16:30' or '6:05', etc.
                 match = re.match(r"^(\d{1,2})(?::(\d{2}))?$", timestr.strip())
                 if not match:
                     return None
                 hour = int(match.group(1))
                 minute = int(match.group(2) or 0)
-                # Use current date in Europe/Stockholm
                 tz = pytz.timezone("Europe/Stockholm")
                 now_dt = datetime.now(tz)
                 dt = tz.localize(datetime(now_dt.year, now_dt.month, now_dt.day, hour, minute))
@@ -430,8 +428,9 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             lines = [l.strip() for l in user_input.get(CONF_LINES, "").split(",") if l.strip()]
             ls[CONF_LINES] = lines
             ls[CONF_NAME] = user_input.get(CONF_NAME, "")
-            start_rfc = parse_time_to_rfc3339(user_input[CONF_LIST_START_TIME])
-            end_rfc = parse_time_to_rfc3339(user_input[CONF_LIST_END_TIME])
+            # Run blocking time parsing in executor
+            start_rfc = await self.hass.async_add_executor_job(parse_time_to_rfc3339, user_input[CONF_LIST_START_TIME])
+            end_rfc = await self.hass.async_add_executor_job(parse_time_to_rfc3339, user_input[CONF_LIST_END_TIME])
             if not start_rfc or not end_rfc:
                 errors[CONF_LIST_START_TIME] = "invalid_time_format"
                 errors[CONF_LIST_END_TIME] = "invalid_time_format"

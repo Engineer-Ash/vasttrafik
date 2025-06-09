@@ -147,7 +147,7 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
         return
 
     # --- Remove orphaned sensors and switches for both journey and list sensors ---
-    entity_registry = await async_get_entity_registry(hass)
+    entity_registry = async_get_entity_registry(hass)  # Remove await, this is a synchronous function
     sensor_domain = "sensor"
     switch_domain = "switch"
     # Collect all valid unique_ids for journey and list sensors
