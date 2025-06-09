@@ -72,6 +72,10 @@ async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry):
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    unload_ok = await hass.config_entries.async_forward_entry_unload(entry, "sensor")
-    unload_ok_switch = await hass.config_entries.async_forward_entry_unload(entry, "switch")
-    return unload_ok and unload_ok_switch
+    try:
+        unload_ok = await hass.config_entries.async_forward_entry_unload(entry, "sensor")
+        unload_ok_switch = await hass.config_entries.async_forward_entry_unload(entry, "switch")
+        return unload_ok and unload_ok_switch
+    except Exception as ex:
+        logging.getLogger(__name__).error("Exception in async_unload_entry: %s\n%s", ex, traceback.format_exc())
+        return False
