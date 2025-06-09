@@ -1,5 +1,5 @@
 {
-  "domain": "vastraffik-journey",
+  "domain": "vastraffik_journey",
   "name": "Vastraffik Journey Sensor",
   "version": "0.2.1",
   "documentation": "https://github.com/Engineer-Ash/vastraffik-journey",
