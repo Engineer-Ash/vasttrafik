@@ -323,9 +323,87 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_add_list_sensor(self, user_input=None):
         errors = {}
+        if user_input is not None and "from_partial" in user_input:
+            # Step 1: User entered a partial 'from' name, fetch suggestions
+            partial = user_input["from_partial"]
+            def get_suggestions():
+                client_id, secret = self._get_credentials()
+                planner = JournyPlanner(client_id, secret)
+                return planner.location_name(partial)
+            try:
+                suggestions = await self.hass.async_add_executor_job(get_suggestions)
+            except Exception as ex:
+                _LOGGER.error("Failed to fetch location suggestions: %s", ex)
+                errors["base"] = "location_error"
+                suggestions = []
+            choices = {str(i): loc["name"] for i, loc in enumerate(suggestions)}
+            schema = vol.Schema({vol.Required("from_choice"): vol.In(list(choices.values()))})
+            return self.async_show_form(
+                step_id="add_list_sensor_from_select",
+                data_schema=schema,
+                errors=errors,
+                description_placeholders={"matches": ", ".join(choices.values())}
+            )
+        elif user_input is not None and "from_choice" in user_input:
+            # Step 2: User selected a 'from' location, now prompt for destination
+            self._current_list_sensor = {CONF_FROM: user_input["from_choice"]}
+            return await self.async_step_add_list_sensor_destination()
+        # Initial step: ask for partial 'from' name
+        schema = vol.Schema({vol.Required("from_partial"): str})
+        return self.async_show_form(
+            step_id="add_list_sensor",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_add_list_sensor_from_select(self, user_input=None):
+        if user_input is not None and "from_choice" in user_input:
+            self._current_list_sensor = {CONF_FROM: user_input["from_choice"]}
+            return await self.async_step_add_list_sensor_destination()
+        return await self.async_step_add_list_sensor()
+
+    async def async_step_add_list_sensor_destination(self, user_input=None):
+        errors = {}
+        if user_input is not None and "destination_partial" in user_input:
+            partial = user_input["destination_partial"]
+            def get_suggestions():
+                client_id, secret = self._get_credentials()
+                planner = JournyPlanner(client_id, secret)
+                return planner.location_name(partial)
+            try:
+                suggestions = await self.hass.async_add_executor_job(get_suggestions)
+            except Exception as ex:
+                _LOGGER.error("Failed to fetch location suggestions: %s", ex)
+                errors["base"] = "location_error"
+                suggestions = []
+            choices = {str(i): loc["name"] for i, loc in enumerate(suggestions)}
+            schema = vol.Schema({vol.Required("destination_choice"): vol.In(list(choices.values()))})
+            return self.async_show_form(
+                step_id="add_list_sensor_destination_select",
+                data_schema=schema,
+                errors=errors,
+                description_placeholders={"matches": ", ".join(choices.values())}
+            )
+        elif user_input is not None and "destination_choice" in user_input:
+            self._current_list_sensor[CONF_DESTINATION] = user_input["destination_choice"]
+            return await self.async_step_add_list_sensor_details()
+        schema = vol.Schema({vol.Required("destination_partial"): str})
+        return self.async_show_form(
+            step_id="add_list_sensor_destination",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_add_list_sensor_destination_select(self, user_input=None):
+        if user_input is not None and "destination_choice" in user_input:
+            self._current_list_sensor[CONF_DESTINATION] = user_input["destination_choice"]
+            return await self.async_step_add_list_sensor_details()
+        return await self.async_step_add_list_sensor_destination()
+
+    async def async_step_add_list_sensor_details(self, user_input=None):
+        errors = {}
+        ls = self._current_list_sensor or {}
         schema = vol.Schema({
-            vol.Required(CONF_FROM): str,
-            vol.Required(CONF_DESTINATION): str,
             vol.Optional(CONF_LINES, default=""): str,
             vol.Optional(CONF_NAME): str,
             vol.Required(CONF_LIST_START_TIME): str,
@@ -334,81 +412,16 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
         })
         if user_input is not None:
             lines = [l.strip() for l in user_input.get(CONF_LINES, "").split(",") if l.strip()]
-            sensor = {
-                CONF_FROM: user_input[CONF_FROM],
-                CONF_DESTINATION: user_input[CONF_DESTINATION],
-                CONF_LINES: lines,
-                CONF_NAME: user_input.get(CONF_NAME, ""),
-                CONF_LIST_START_TIME: user_input[CONF_LIST_START_TIME],
-                CONF_LIST_END_TIME: user_input[CONF_LIST_END_TIME],
-                CONF_LIST_TIME_RELATES_TO: user_input.get(CONF_LIST_TIME_RELATES_TO, "departure"),
-            }
-            self.journey_list_sensors.append(sensor)
-            return await self.async_step_menu()
-        return self.async_show_form(
-            step_id="add_list_sensor",
-            data_schema=schema,
-            errors=errors,
-        )
-
-    async def async_step_select_edit_list(self, user_input=None):
-        errors = {}
-        choices = {f"{ls.get(CONF_NAME) or ls.get(CONF_FROM) + '→' + ls.get(CONF_DESTINATION)}": i for i, ls in enumerate(self.journey_list_sensors)}
-        schema = vol.Schema({vol.Required("edit_list_label"): vol.In(list(choices.keys()))})
-        if user_input is not None:
-            idx = choices[user_input["edit_list_label"]]
-            self._edit_list_index = idx
-            self._current_list_sensor = self.journey_list_sensors[idx]
-            return await self.async_step_edit_list_sensor()
-        return self.async_show_form(
-            step_id="select_edit_list",
-            data_schema=schema,
-            errors=errors,
-        )
-
-    async def async_step_edit_list_sensor(self, user_input=None):
-        errors = {}
-        ls = self._current_list_sensor or {}
-        schema = vol.Schema({
-            vol.Required(CONF_FROM, default=ls.get(CONF_FROM, "")): str,
-            vol.Required(CONF_DESTINATION, default=ls.get(CONF_DESTINATION, "")): str,
-            vol.Optional(CONF_LINES, default=", ".join(ls.get(CONF_LINES, [])) if isinstance(ls.get(CONF_LINES), list) else str(ls.get(CONF_LINES, ""))): str,
-            vol.Optional(CONF_NAME, default=ls.get(CONF_NAME, "")): str,
-            vol.Required(CONF_LIST_START_TIME, default=ls.get(CONF_LIST_START_TIME, "06:00")): str,
-            vol.Required(CONF_LIST_END_TIME, default=ls.get(CONF_LIST_END_TIME, "09:00")): str,
-            vol.Optional(CONF_LIST_TIME_RELATES_TO, default=ls.get(CONF_LIST_TIME_RELATES_TO, "departure")): vol.In(["departure", "arrival"]),
-        })
-        if user_input is not None:
-            lines = [l.strip() for l in user_input.get(CONF_LINES, "").split(",") if l.strip()]
-            ls = {
-                CONF_FROM: user_input[CONF_FROM],
-                CONF_DESTINATION: user_input[CONF_DESTINATION],
-                CONF_LINES: lines,
-                CONF_NAME: user_input.get(CONF_NAME, ""),
-                CONF_LIST_START_TIME: user_input[CONF_LIST_START_TIME],
-                CONF_LIST_END_TIME: user_input[CONF_LIST_END_TIME],
-                CONF_LIST_TIME_RELATES_TO: user_input.get(CONF_LIST_TIME_RELATES_TO, "departure"),
-            }
-            self.journey_list_sensors[self._edit_list_index] = ls
+            ls[CONF_LINES] = lines
+            ls[CONF_NAME] = user_input.get(CONF_NAME, "")
+            ls[CONF_LIST_START_TIME] = user_input[CONF_LIST_START_TIME]
+            ls[CONF_LIST_END_TIME] = user_input[CONF_LIST_END_TIME]
+            ls[CONF_LIST_TIME_RELATES_TO] = user_input.get(CONF_LIST_TIME_RELATES_TO, "departure")
+            self.journey_list_sensors.append(ls)
             self._current_list_sensor = None
-            self._edit_list_index = None
             return await self.async_step_menu()
         return self.async_show_form(
-            step_id="edit_list_sensor",
-            data_schema=schema,
-            errors=errors,
-        )
-
-    async def async_step_select_remove_list(self, user_input=None):
-        errors = {}
-        choices = {f"{ls.get(CONF_NAME) or ls.get(CONF_FROM) + '→' + ls.get(CONF_DESTINATION)}": i for i, ls in enumerate(self.journey_list_sensors)}
-        schema = vol.Schema({vol.Required("remove_list_label"): vol.In(list(choices.keys()))})
-        if user_input is not None:
-            idx = choices[user_input["remove_list_label"]]
-            self.journey_list_sensors.pop(idx)
-            return await self.async_step_menu()
-        return self.async_show_form(
-            step_id="select_remove_list",
+            step_id="add_list_sensor_details",
             data_schema=schema,
             errors=errors,
         )

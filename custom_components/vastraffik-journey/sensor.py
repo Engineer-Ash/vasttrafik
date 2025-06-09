@@ -139,22 +139,28 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
     data = entry.data
     options = entry.options
     departures = options.get(CONF_DEPARTURES)
+    journey_list_sensors = options.get("journey_list_sensors", [])
     if departures is None:
         departures = data.get(CONF_DEPARTURES)
     if not departures:
         _LOGGER.info("No departures found in config entry data or options: %s", {**data, **options})
         return
 
-    # --- Remove orphaned sensors and switches if any attribute except pause is changed ---
+    # --- Remove orphaned sensors and switches for both journey and list sensors ---
     entity_registry = await async_get_entity_registry(hass)
     sensor_domain = "sensor"
     switch_domain = "switch"
+    # Collect all valid unique_ids for journey and list sensors
     current_sensor_unique_ids = set()
     current_switch_unique_ids = set()
     for idx, dep in enumerate(departures):
-        current_sensor_unique_ids.add(build_sensor_unique_id(dep, idx))
-        current_switch_unique_ids.add(f"pause_{build_sensor_unique_id(dep, idx)}")
-
+        uid = build_sensor_unique_id(dep, idx)
+        current_sensor_unique_ids.add(uid)
+        current_switch_unique_ids.add(f"pause_{uid}")
+    for idx, ls in enumerate(journey_list_sensors):
+        # List sensor unique_id format must match VasttrafikJourneyListSensor
+        uid = f"journeylist_{ls.get('from')}_{ls.get('destination')}_{ls.get('list_start_time')}_{ls.get('list_end_time')}_{ls.get('list_time_relates_to', 'departure')}_{idx}"
+        current_sensor_unique_ids.add(uid)
     # Remove orphaned sensors and their linked pause switches
     for entity in list(entity_registry.entities.values()):
         # Remove orphaned sensors
@@ -170,7 +176,6 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
                         entity_registry.async_remove(sw_entity.entity_id)
         # Remove orphaned pause switches (if their linked sensor is gone)
         if entity.domain == switch_domain and entity.config_entry_id == entry.entry_id:
-            # If the corresponding sensor unique_id does not exist, remove the switch
             linked_sensor_unique_id = entity.unique_id.replace("pause_", "", 1)
             if linked_sensor_unique_id not in current_sensor_unique_ids:
                 _LOGGER.info(f"Removing orphaned pause switch (no linked sensor): {entity.entity_id} (unique_id={entity.unique_id})")
@@ -189,6 +194,19 @@ async def async_setup_entry(hass: HomeAssistant, entry, async_add_entities: AddE
                 departure.get(CONF_DELAY),
                 departure.get("pause_entity_id"),
                 index=idx,  # Pass index to sensor
+            )
+            sensors.append(sensor)
+        for idx, ls in enumerate(journey_list_sensors):
+            sensor = VasttrafikJourneyListSensor(
+                planner,
+                ls.get(CONF_NAME),
+                ls.get(CONF_FROM),
+                ls.get(CONF_DESTINATION),
+                ls.get(CONF_LINES),
+                ls.get(CONF_LIST_START_TIME),
+                ls.get(CONF_LIST_END_TIME),
+                ls.get(CONF_LIST_TIME_RELATES_TO, "departure"),
+                index=idx,
             )
             sensors.append(sensor)
         return sensors
