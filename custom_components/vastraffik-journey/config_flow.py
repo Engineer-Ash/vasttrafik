@@ -414,7 +414,6 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             import re
             from datetime import datetime
             import pytz
-            # Helper to parse and convert to RFC 3339 in Europe/Stockholm
             def parse_time_to_rfc3339(timestr):
                 match = re.match(r"^(\d{1,2})(?::(\d{2}))?$", timestr.strip())
                 if not match:
@@ -445,4 +444,108 @@ class VastraffikJourneyOptionsFlowHandler(config_entries.OptionsFlow):
             step_id="add_list_sensor_details",
             data_schema=schema,
             errors=errors,
+        )
+
+    async def async_step_select_edit_list(self, user_input=None):
+        errors = {}
+        # Build friendly names for each journey list sensor
+        choices = {}
+        for i, ls in enumerate(self.journey_list_sensors):
+            if ls.get(CONF_NAME):
+                label = ls[CONF_NAME]
+            elif ls.get(CONF_FROM) and ls.get(CONF_DESTINATION):
+                label = f"{ls.get(CONF_FROM)} → {ls.get(CONF_DESTINATION)}"
+            else:
+                label = f"List Sensor {i+1}"
+            while label in choices:
+                label += f" ({i+1})"
+            choices[label] = i
+        schema = vol.Schema({vol.Required("edit_list_label"): vol.In(list(choices.keys()))})
+        if user_input is not None:
+            idx = choices[user_input["edit_list_label"]]
+            self._edit_list_index = idx
+            self._current_list_sensor = self.journey_list_sensors[idx]
+            return await self.async_step_edit_list_sensor()
+        return self.async_show_form(
+            step_id="select_edit_list",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"choices": str(choices)}
+        )
+
+    async def async_step_edit_list_sensor(self, user_input=None):
+        errors = {}
+        ls = self._current_list_sensor or {}
+        schema = vol.Schema({
+            vol.Required(CONF_FROM, default=ls.get(CONF_FROM, "")): str,
+            vol.Required(CONF_DESTINATION, default=ls.get(CONF_DESTINATION, "")): str,
+            vol.Optional(CONF_LINES, default=", ".join(ls.get(CONF_LINES, [])) if isinstance(ls.get(CONF_LINES), list) else str(ls.get(CONF_LINES, ""))): str,
+            vol.Optional(CONF_NAME, default=ls.get(CONF_NAME, "")): str,
+            vol.Required(CONF_LIST_START_TIME, default=ls.get(CONF_LIST_START_TIME, "")): str,
+            vol.Required(CONF_LIST_END_TIME, default=ls.get(CONF_LIST_END_TIME, "")): str,
+            vol.Optional(CONF_LIST_TIME_RELATES_TO, default=ls.get(CONF_LIST_TIME_RELATES_TO, "departure")): vol.In(["departure", "arrival"]),
+        })
+        if user_input is not None:
+            import re
+            from datetime import datetime
+            import pytz
+            def parse_time_to_rfc3339(timestr):
+                match = re.match(r"^(\d{1,2})(?::(\d{2}))?$", timestr.strip())
+                if not match:
+                    return None
+                hour = int(match.group(1))
+                minute = int(match.group(2) or 0)
+                tz = pytz.timezone("Europe/Stockholm")
+                now_dt = datetime.now(tz)
+                dt = tz.localize(datetime(now_dt.year, now_dt.month, now_dt.day, hour, minute))
+                return dt.isoformat()
+            lines = [l.strip() for l in user_input.get(CONF_LINES, "").split(",") if l.strip()]
+            ls[CONF_FROM] = user_input[CONF_FROM]
+            ls[CONF_DESTINATION] = user_input[CONF_DESTINATION]
+            ls[CONF_LINES] = lines
+            ls[CONF_NAME] = user_input.get(CONF_NAME, "")
+            # Run blocking time parsing in executor
+            start_rfc = await self.hass.async_add_executor_job(parse_time_to_rfc3339, user_input[CONF_LIST_START_TIME])
+            end_rfc = await self.hass.async_add_executor_job(parse_time_to_rfc3339, user_input[CONF_LIST_END_TIME])
+            if not start_rfc or not end_rfc:
+                errors[CONF_LIST_START_TIME] = "invalid_time_format"
+                errors[CONF_LIST_END_TIME] = "invalid_time_format"
+            else:
+                ls[CONF_LIST_START_TIME] = start_rfc
+                ls[CONF_LIST_END_TIME] = end_rfc
+                ls[CONF_LIST_TIME_RELATES_TO] = user_input.get(CONF_LIST_TIME_RELATES_TO, "departure")
+                self.journey_list_sensors[self._edit_list_index] = ls
+                self._current_list_sensor = None
+                self._edit_list_index = None
+                return await self.async_step_menu()
+        return self.async_show_form(
+            step_id="edit_list_sensor",
+            data_schema=schema,
+            errors=errors,
+        )
+
+    async def async_step_select_remove_list(self, user_input=None):
+        errors = {}
+        # Build friendly names for each journey list sensor
+        choices = {}
+        for i, ls in enumerate(self.journey_list_sensors):
+            if ls.get(CONF_NAME):
+                label = ls[CONF_NAME]
+            elif ls.get(CONF_FROM) and ls.get(CONF_DESTINATION):
+                label = f"{ls.get(CONF_FROM)} → {ls.get(CONF_DESTINATION)}"
+            else:
+                label = f"List Sensor {i+1}"
+            while label in choices:
+                label += f" ({i+1})"
+            choices[label] = i
+        schema = vol.Schema({vol.Required("remove_list_label"): vol.In(list(choices.keys()))})
+        if user_input is not None:
+            idx = choices[user_input["remove_list_label"]]
+            self.journey_list_sensors.pop(idx)
+            return await self.async_step_menu()
+        return self.async_show_form(
+            step_id="select_remove_list",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"choices": str(choices)}
         )
